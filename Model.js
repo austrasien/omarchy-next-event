@@ -15,6 +15,7 @@ var DAYS_PER_WEEK = 7
 
 var DEFAULT_REFRESH_MINUTES = 5
 var DEFAULT_LOOKAHEAD_DAYS = 3
+var DEFAULT_ANNOUNCE_LEAD_HOURS = 3
 var DEFAULT_MAX_TITLE_LENGTH = 28
 var MIN_MAX_TITLE_LENGTH = 8
 var MIN_TITLE_CHARS = 3
@@ -163,6 +164,7 @@ var Constants = {
   DAYS_PER_WEEK: DAYS_PER_WEEK,
   DEFAULT_REFRESH_MINUTES: DEFAULT_REFRESH_MINUTES,
   DEFAULT_LOOKAHEAD_DAYS: DEFAULT_LOOKAHEAD_DAYS,
+  DEFAULT_ANNOUNCE_LEAD_HOURS: DEFAULT_ANNOUNCE_LEAD_HOURS,
   DEFAULT_MAX_TITLE_LENGTH: DEFAULT_MAX_TITLE_LENGTH,
   MIN_MAX_TITLE_LENGTH: MIN_MAX_TITLE_LENGTH,
   MIN_TITLE_CHARS: MIN_TITLE_CHARS,
@@ -1640,11 +1642,24 @@ class FeedConfigParser {
     return feeds
   }
 
+  // QML `var` arrays from shell.json are often QVariantList, not JS Array.
+  static asFeedList(raw) {
+    if (raw == null || raw === "") return null
+    if (Array.isArray(raw)) return raw
+    if (typeof raw === "object" && typeof raw.length === "number" && typeof raw !== "string") {
+      var list = []
+      for (var i = 0; i < raw.length; i++) list.push(raw[i])
+      return list
+    }
+    return null
+  }
+
   static splitIcsFeeds(raw) {
-    if (Array.isArray(raw)) return FeedConfigParser.feedsFromArray(raw)
+    var list = FeedConfigParser.asFeedList(raw)
+    if (list) return FeedConfigParser.feedsFromArray(list)
 
     var text = String(raw == null ? "" : raw).trim()
-    if (!text) return []
+    if (!text || text === "[object Object]") return []
 
     if (text.charAt(0) === "[") {
       try {
@@ -2069,8 +2084,24 @@ class DisplayFormatter {
     return status ? label + " · " + status : label
   }
 
-  static barLabel(configured, nextMeeting, now, maxTitleLength, use12Hour) {
+  // Hours ahead to show the next event on the bar. 0 = always show.
+  // All-day events never take the bar: they are not a countdown.
+  static shouldAnnounceOnBar(next, now, announceLeadHours) {
+    if (!next || !next.start) return false
+    var hours = parseInt(announceLeadHours, 10)
+    if (!hours || hours <= 0) return true
+    if (DisplayFormatter.isEventAllDay(next)) return false
+    var nowMs = now.getTime()
+    var start = next.start.getTime()
+    var end = next.end ? next.end.getTime() : start
+    if (nowMs >= start && nowMs < end) return true
+    if (start <= nowMs) return false
+    return start - nowMs <= hours * MS_PER_HOUR
+  }
+
+  static barLabel(configured, nextMeeting, now, maxTitleLength, use12Hour, announceLeadHours) {
     if (!configured || !nextMeeting) return ""
+    if (!DisplayFormatter.shouldAnnounceOnBar(nextMeeting, now, announceLeadHours)) return ""
     var icon = nextMeeting.meetUrl ? ICON_MEETING_VIDEO + "  " : ICON_CALENDAR_EVENT + "  "
     return icon + DisplayFormatter.formatLabel(nextMeeting, now, maxTitleLength, use12Hour)
   }
@@ -2277,8 +2308,24 @@ function timeRange(start, end, allDay, use12Hour) {
 function meetingTimeLabel(start, end, now, allDay, use12Hour) {
   return DisplayFormatter.meetingTimeLabel(start, end, now, allDay, use12Hour)
 }
-function barLabel(configured, nextMeeting, now, maxTitleLength, use12Hour) {
-  return DisplayFormatter.barLabel(configured, nextMeeting, now, maxTitleLength, use12Hour)
+function normalizeAnnounceLeadHours(value) {
+  if (value === "" || value === null || value === undefined) return DEFAULT_ANNOUNCE_LEAD_HOURS
+  var n = parseInt(value, 10)
+  if (isNaN(n) || n < 0) return DEFAULT_ANNOUNCE_LEAD_HOURS
+  return n
+}
+function shouldAnnounceOnBar(next, now, announceLeadHours) {
+  return DisplayFormatter.shouldAnnounceOnBar(next, now, announceLeadHours)
+}
+function barLabel(configured, nextMeeting, now, maxTitleLength, use12Hour, announceLeadHours) {
+  return DisplayFormatter.barLabel(
+    configured,
+    nextMeeting,
+    now,
+    maxTitleLength,
+    use12Hour,
+    announceLeadHours
+  )
 }
 function headerStatus(
   fetching,
@@ -2390,6 +2437,8 @@ if (typeof module !== "undefined" && module.exports) {
     relativeStatus: relativeStatus,
     timeRange: timeRange,
     meetingTimeLabel: meetingTimeLabel,
+    normalizeAnnounceLeadHours: normalizeAnnounceLeadHours,
+    shouldAnnounceOnBar: shouldAnnounceOnBar,
     barLabel: barLabel,
     headerStatus: headerStatus,
     tooltipLine: tooltipLine,

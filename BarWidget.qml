@@ -8,10 +8,9 @@ import "Model.js" as Model
 // NextEvent — the next event, right in the bar.
 //
 // Left click opens the meeting list; right click joins the next meeting;
-// middle click refetches the calendar. When there is nothing actionable
-// (no feed configured, or no upcoming meeting) the widget shrinks to a
-// muted camera glyph that still opens the panel — which is where the
-// setup instructions live.
+// middle click refetches the calendar. The event title only appears on the
+// bar within announceLeadHours (default 3); otherwise a calendar glyph
+// stays so the agenda panel is always one click away.
 BarWidget {
   id: root
   moduleName: "tobiasz-p.next-event"
@@ -19,11 +18,24 @@ BarWidget {
   // ---- settings (shell.json layout entry, `omarchy bar set`)
   // icsUrl is a feed list: "url", "url1,url2", "label|url" per feed
   // (comma-separated), or a JSON array of strings / { url, label } objects.
-  readonly property var icsFeeds: Model.splitIcsFeeds(setting("icsUrl", ""))
+  readonly property var icsFeeds: Model.splitIcsFeeds(settings ? settings.icsUrl : "")
+  readonly property bool hasCalendarSource: {
+    var url = settings ? settings.icsUrl : null
+    if (url == null || url === "") return false
+    if (typeof url === "string") return url.trim().length > 0 && url.trim() !== "[object Object]"
+    if (typeof url === "object" && typeof url.length === "number") return url.length > 0
+    if (typeof url === "object") return true
+    return icsFeeds.length > 0
+  }
   readonly property string eventsJsonPath: String(setting("eventsJsonPath", (Quickshell.env("HOME") || "") + "/.local/state/omarchy/calendar-events.json") || "").trim()
-  readonly property string sourceMode: String(setting("sourceMode", icsFeeds.length > 0 ? Model.SOURCE_MODE_ICS : Model.SOURCE_MODE_JSON) || "").trim()
+  readonly property string sourceMode: {
+    var explicit = settings && settings.sourceMode != null ? String(settings.sourceMode).trim() : ""
+    if (explicit) return explicit
+    return icsFeeds.length > 0 ? Model.SOURCE_MODE_ICS : Model.SOURCE_MODE_JSON
+  }
   readonly property int refreshMinutes: Math.max(1, parseInt(setting("refreshMinutes", Model.DEFAULT_REFRESH_MINUTES), 10) || Model.DEFAULT_REFRESH_MINUTES)
   readonly property int showDaysAhead: Math.max(1, parseInt(setting("showDaysAhead", Model.DEFAULT_LOOKAHEAD_DAYS), 10) || Model.DEFAULT_LOOKAHEAD_DAYS)
+  readonly property int announceLeadHours: Model.normalizeAnnounceLeadHours(setting("announceLeadHours", Model.DEFAULT_ANNOUNCE_LEAD_HOURS))
   readonly property int maxTitleLength: Math.max(Model.MIN_MAX_TITLE_LENGTH, parseInt(setting("maxTitleLength", Model.DEFAULT_MAX_TITLE_LENGTH), 10) || Model.DEFAULT_MAX_TITLE_LENGTH)
   readonly property string timeFormat: String(setting("timeFormat", Model.DEFAULT_TIME_FORMAT) || Model.DEFAULT_TIME_FORMAT).trim()
   readonly property bool use12Hour: Model.is12Hour(timeFormat)
@@ -52,7 +64,7 @@ BarWidget {
 
   // ---- state
   property bool jsonLoaded: false
-  readonly property bool configured: (sourceMode === Model.SOURCE_MODE_ICS ? icsFeeds.length > 0 : jsonLoaded) || (rawEvents && rawEvents.length > 0)
+  readonly property bool configured: hasCalendarSource || icsFeeds.length > 0 || jsonLoaded || (rawEvents && rawEvents.length > 0)
   onSourceModeChanged: {
     jsonLoaded = false
     fetchCalendar()
@@ -80,7 +92,7 @@ BarWidget {
   property string currentFeedColor: ""
   property string feedOutput: ""
 
-  readonly property string label: Model.barLabel(root.configured, root.nextMeeting, root.now, root.maxTitleLength, root.use12Hour)
+  readonly property string label: Model.barLabel(root.configured, root.nextMeeting, root.now, root.maxTitleLength, root.use12Hour, root.announceLeadHours)
   readonly property bool inMeeting: nextMeeting
     && !nextMeeting.allDay
     && nextMeeting.start && nextMeeting.end
@@ -91,7 +103,9 @@ BarWidget {
   function openMeetingUrl(url) {
     if (!url) return
     var quote = Util.shellQuote(url)
-    if (browserCommand !== "") bar.run(browserCommand + " " + quote)
+    // Prefer the configured opener (google-app-open → Omarchy web app).
+    // Fall back to xdg-open so Zoom/Teams still work when no web app matches.
+    if (browserCommand !== "") bar.run(browserCommand + " " + quote + " || xdg-open " + quote)
     else bar.run("xdg-open " + quote)
   }
 
@@ -117,7 +131,7 @@ BarWidget {
   // take down the whole widget: the rest still render, and the failed count is
   // surfaced as a partial-offline status.
   function fetchCalendar() {
-    if (root.sourceMode === "ics") {
+    if (root.icsFeeds.length > 0) {
       if (!root.configured || fetchProc.running) return
       root.pendingFeeds = root.icsFeeds.slice()
       root.feedChunks = []
@@ -150,7 +164,7 @@ BarWidget {
       return
     }
     fetchProc.stdinEnabled = true
-    fetchProc.command = ["curl", "-fsSL", "--max-time", String(Model.FETCH_TIMEOUT_SECONDS), "--max-filesize", String(root.maxFeedSizeMiB * Model.BYTES_PER_MIB), "-K", "-"]
+    fetchProc.command = ["curl", "-fsSL", "-A", "Mozilla/5.0", "--max-time", String(Model.FETCH_TIMEOUT_SECONDS), "--max-filesize", String(root.maxFeedSizeMiB * Model.BYTES_PER_MIB), "-K", "-"]
     fetchProc.running = true
   }
 
@@ -370,7 +384,7 @@ BarWidget {
     foreground: root.useCalendarColors && root.colorOnBar && root.nextMeeting && root.nextMeeting.calendarColor
       ? root.nextMeeting.calendarColor
       : (root.bar ? root.bar.barForeground : Color.foreground)
-    labelVisible: true
+    labelVisible: false
     hasVisualContent: true
     dimmed: root.label === ""
     active: root.inMeeting
@@ -378,6 +392,23 @@ BarWidget {
     horizontalMargin: 8.75
     verticalPadding: 8.75
     tooltipText: root.tooltipLine
+
+    Text {
+      id: outlinedLabel
+      anchors.centerIn: parent
+      enabled: false
+      textFormat: Text.PlainText
+      text: button.text
+      color: button.active && button.useActiveColor ? button.activeColor : button.foreground
+      font.family: button.fontFamily
+      font.pixelSize: button.fontSize
+      style: Text.Outline
+      styleColor: "#000000"
+      renderType: Text.QtRendering
+      rotation: button.textRotation
+      horizontalAlignment: Text.AlignHCenter
+      verticalAlignment: Text.AlignVCenter
+    }
 
     onPressed: function(b) {
       if (b === Qt.RightButton) {

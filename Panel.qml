@@ -75,7 +75,9 @@ Panel {
     root.calendarLegend = root.hostWidget.calendarLegend || []
     root.next = root.hostWidget.nextMeeting || null
 
-    var configured = !!root.hostWidget.configured
+    // The bar may hide the event *title* when nothing is within announceLeadHours.
+    // The panel always shows the real agenda whenever calendars are configured.
+    var configured = !!(root.hostWidget.configured || root.hostWidget.hasCalendarSource)
     setupGuide.visible = !root.inSettingsView && !configured
     heroCard.visible = !root.inSettingsView && configured && !!root.next
     emptySchedule.visible = !root.inSettingsView && configured && root.scheduleGroups.length === 0

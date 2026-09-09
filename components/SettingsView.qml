@@ -273,6 +273,19 @@ Item {
       }
 
       SettingStepper {
+        id: announceLeadStepper
+        label: "Bar lead time"
+        description: "Hours ahead to show the next event on the bar (0 = always)"
+        from: 0
+        to: 24
+        stepSize: 1
+        value: root.hostWidget ? root.hostWidget.announceLeadHours : Model.DEFAULT_ANNOUNCE_LEAD_HOURS
+        contentForeground: root.contentForeground
+        contentFontFamily: root.contentFontFamily
+        onModified: function(v) { root.settingChanged("announceLeadHours", v) }
+      }
+
+      SettingStepper {
         id: maxTitleStepper
         label: "Max bar title length"
         description: "Maximum character length for the event title in the bar"
@@ -402,7 +415,7 @@ Item {
         id: browserCmdField
         width: parent.width
         label: "Browser command"
-        description: "Custom command used to open meeting and calendar URLs (defaults to xdg-open)."
+        description: "Custom command used to open meeting and calendar URLs. Use google-app-open to join Meet in the Omarchy web app (falls back to xdg-open)."
         text: root.hostWidget ? String(root.hostWidget.setting("browserCommand", "")) : ""
         placeholderText: "xdg-open"
         contentForeground: root.contentForeground

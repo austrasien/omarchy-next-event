@@ -53,6 +53,19 @@ describe("FeedConfigParser", () => {
       })
     })
 
+    it("parses array-like objects the way QML exposes shell.json lists", () => {
+      const qmlList = {
+        0: { url: "https://a.com", label: "A", color: "#ea4335" },
+        1: { url: "https://b.com" },
+        length: 2
+      }
+      const feeds = FeedConfigParser.splitIcsFeeds(qmlList)
+      assert.strictEqual(feeds.length, 2)
+      assert.strictEqual(feeds[0].label, "A")
+      assert.strictEqual(feeds[0].url, "https://a.com")
+      assert.strictEqual(feeds[1].url, "https://b.com")
+    })
+
     it("returns an empty array when input is empty or null", () => {
       assert.deepStrictEqual(FeedConfigParser.splitIcsFeeds(""), [])
       assert.deepStrictEqual(FeedConfigParser.splitIcsFeeds(null), [])

@@ -216,6 +216,37 @@ describe("DisplayFormatter", () => {
       assert.strictEqual(DisplayFormatter.barLabel(false, timedEvent, now, 30), "")
       assert.strictEqual(DisplayFormatter.barLabel(true, null, now, 30), "")
     })
+
+    it("hides the bar label when the next event is more than the lead time away", () => {
+      const laterEvent = new CalendarEvent({
+        title: "Sprint Review",
+        start: new Date(2026, 7, 28, 14, 0, 0),
+        end: new Date(2026, 7, 28, 15, 0, 0),
+        meetUrl: "https://meet.google.com/abc"
+      })
+      assert.strictEqual(DisplayFormatter.barLabel(true, laterEvent, now, 30, false, 3), "")
+      assert.strictEqual(
+        DisplayFormatter.barLabel(true, timedEvent, now, 30, false, 3),
+        "  Sprint Review · in 60 min"
+      )
+    })
+
+    it("keeps showing an event that is already in progress", () => {
+      const inProgress = new CalendarEvent({
+        title: "Sprint Review",
+        start: new Date(2026, 7, 28, 8, 0, 0),
+        end: new Date(2026, 7, 28, 10, 0, 0),
+        meetUrl: "https://meet.google.com/abc"
+      })
+      assert.strictEqual(
+        DisplayFormatter.barLabel(true, inProgress, now, 30, false, 3),
+        "  Sprint Review · 1h left"
+      )
+    })
+
+    it("does not put all-day events on the bar when a lead time is set", () => {
+      assert.strictEqual(DisplayFormatter.barLabel(true, allDayToday, now, 30, false, 3), "")
+    })
   })
 
   describe("headerStatus()", () => {
