@@ -28,3 +28,6 @@ calendar-events.json
 shell.json
 .env
 .env.*
+
+# Local gh auth for publish (never commit)
+.gh-config/
