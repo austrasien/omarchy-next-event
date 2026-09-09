@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "tobiasz-p.next-event",
   "name": "NextEvent",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "author": "tobiasz-p",
   "license": "MIT",
-  "description": "Next event in the bar — Google Calendar feed, click to join Google Meet.",
+  "description": "Next event in the bar — Google Calendar feed, click to join Google Meet (austrasien fork: bar lead time + Omarchy web-app open).",
   "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "BarWidget.qml"
