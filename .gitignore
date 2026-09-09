@@ -3,9 +3,28 @@
 *~
 *.swp
 *.bak
+.idea/
+.vscode/
+.cursor/
 
 # Node & dependencies
 node_modules/
 
 # Local logs
 *.log
+
+# Local runtime / secrets (never commit)
+# Google OAuth client credentials from sync/setup
+client_secret*.json
+**/client_secret*.json
+# Synced calendar state (OAuth / omarchy-calendar JSON dump)
+calendar-events.json
+**/calendar-events.json
+# Private iCal dumps or personal fixtures
+*.local.ics
+*.local.json
+*.local.*
+# Accidental shell / env copies
+shell.json
+.env
+.env.*
