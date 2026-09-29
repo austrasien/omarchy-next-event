@@ -58,7 +58,7 @@ NextEvent watches your calendars and surfaces the next actionable meeting in the
 ### 🧩 This fork
 - `announceLeadHours` (settings stepper **Bar lead time**, `0` = always show title).
 - All-day events never steal the bar title when a lead time is set.
-- Outlined bar label for readability on busy wallpapers.
+- Outlined bar label only when the bar is opaque, so a transparent bar stays as readable as the clock.
 
 ## 🛠 Installation (Omarchy)
 

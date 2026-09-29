@@ -15,6 +15,10 @@ BarWidget {
   id: root
   moduleName: "tobiasz-p.next-event"
 
+  // Outline only against a solid bar. `bar` is a QtObject (not var) so this
+  // binding follows the host flipping transparent after the color sample.
+  readonly property bool barTransparent: bar ? bar.transparent : false
+
   // ---- settings (shell.json layout entry, `omarchy bar set`)
   // icsUrl is a feed list: "url", "url1,url2", "label|url" per feed
   // (comma-separated), or a JSON array of strings / { url, label } objects.
@@ -402,9 +406,11 @@ BarWidget {
       color: button.active && button.useActiveColor ? button.activeColor : button.foreground
       font.family: button.fontFamily
       font.pixelSize: button.fontSize
-      style: Text.Outline
+      // Black outline keeps the title readable on a solid bar. On a
+      // transparent bar it reads as a dirty shadow against the wallpaper.
+      style: root.barTransparent ? Text.Normal : Text.Outline
       styleColor: "#000000"
-      renderType: Text.QtRendering
+      renderType: root.barTransparent ? Text.NativeRendering : Text.QtRendering
       rotation: button.textRotation
       horizontalAlignment: Text.AlignHCenter
       verticalAlignment: Text.AlignVCenter
