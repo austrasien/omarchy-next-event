@@ -102,6 +102,21 @@ BarWidget {
     && nextMeeting.start && nextMeeting.end
     && root.now.getTime() >= nextMeeting.start.getTime()
     && root.now.getTime() < nextMeeting.end.getTime()
+  // Title is on the bar only inside announceLeadHours (or while live).
+  readonly property bool announcingSoon: root.label !== "" && !root.inMeeting
+  readonly property color sampledForeground: bar ? bar.barForeground : Color.foreground
+  // Transparent bar: punchier dark red / burnt orange (Qt.darker turns
+  // urgent into brown). Opaque bar keeps the theme accent / urgent as-is.
+  readonly property color soonColor: root.barTransparent ? "#9a3412" : Color.accent
+  readonly property color liveColor: root.barTransparent ? "#b91c1c" : (bar ? bar.urgent : Color.urgent)
+  readonly property bool feedColorOnBar: root.useCalendarColors && root.colorOnBar
+    && !!(root.nextMeeting && root.nextMeeting.calendarColor)
+  readonly property color barLabelColor: {
+    if (root.feedColorOnBar) return root.nextMeeting.calendarColor
+    if (root.inMeeting) return root.liveColor
+    if (root.announcingSoon) return root.soonColor
+    return root.sampledForeground
+  }
 
   // ---- actions
   function openMeetingUrl(url) {
@@ -385,14 +400,12 @@ BarWidget {
     anchors.fill: parent
     bar: root.bar
     text: root.label !== "" ? root.label : Model.ICON_CALENDAR_EMPTY
-    foreground: root.useCalendarColors && root.colorOnBar && root.nextMeeting && root.nextMeeting.calendarColor
-      ? root.nextMeeting.calendarColor
-      : (root.bar ? root.bar.barForeground : Color.foreground)
+    foreground: root.barLabelColor
     labelVisible: false
     hasVisualContent: true
     dimmed: root.label === ""
     active: root.inMeeting
-    useActiveColor: !(root.useCalendarColors && root.colorOnBar)
+    useActiveColor: false
     horizontalMargin: 8.75
     verticalPadding: 8.75
     tooltipText: root.tooltipLine
@@ -403,11 +416,9 @@ BarWidget {
       enabled: false
       textFormat: Text.PlainText
       text: button.text
-      color: button.active && button.useActiveColor ? button.activeColor : button.foreground
+      color: root.barLabelColor
       font.family: button.fontFamily
       font.pixelSize: button.fontSize
-      // Black outline keeps the title readable on a solid bar. On a
-      // transparent bar it reads as a dirty shadow against the wallpaper.
       style: root.barTransparent ? Text.Normal : Text.Outline
       styleColor: "#000000"
       renderType: root.barTransparent ? Text.NativeRendering : Text.QtRendering

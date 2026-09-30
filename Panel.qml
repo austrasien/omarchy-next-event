@@ -28,7 +28,10 @@ Panel {
   property date now: hostWidget ? hostWidget.now : new Date()
   property bool inSettingsView: false
 
-  readonly property color contentForeground: bar ? bar.barForeground : Color.foreground
+  // Popup copy sits on Color.popups.background. bar.barForeground follows the
+  // wallpaper sample while the bar is transparent, so agenda text can collapse
+  // into the dark card. Same split as omarchy.clock (bar.foreground / theme).
+  readonly property color contentForeground: Color.popups.text
   readonly property string contentFontFamily: bar ? bar.fontFamily : Style.font.family
 
   function open() {
