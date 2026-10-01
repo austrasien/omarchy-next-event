@@ -123,20 +123,23 @@ BarWidget {
   readonly property real eventProgress: Model.eventProgress(root.nextMeeting, root.now)
   readonly property real pillSoonProgress: Model.pillProgress(root.nextMeeting, root.now, root.pillShownAtMs)
   readonly property bool pillVisible: root.inMeeting || root.announcingSoon
-  readonly property color pillTrackColor: {
-    if (!root.pillVisible) return "transparent"
-    if (root.inMeeting) return Util.alpha(root.liveColor, root.barTransparent ? 0.22 : 0.10)
-    return Util.alpha(root.soonColor, root.barTransparent ? 0.28 : 0.12)
-  }
-  readonly property color pillFillColor: {
-    if (root.inMeeting) return Util.alpha(root.liveColor, root.barTransparent ? 0.70 : 0.28)
+  // Track and fill share one RGB. A 0.28 orange wash over this sky wallpaper
+  // composites to grey (same trap as `#9a3412`). The unfilled side is the
+  // fill colour at lower alpha — high enough to stay red, not grey.
+  readonly property color pillHue: {
+    if (root.inMeeting) return root.liveColor
     var t = Math.max(0, Math.min(1, root.pillSoonProgress))
     var s = root.soonColor
     var l = root.liveColor
-    return Util.alpha(
-      Qt.rgba(s.r + (l.r - s.r) * t, s.g + (l.g - s.g) * t, s.b + (l.b - s.b) * t, 1),
-      root.barTransparent ? 0.70 : 0.28
-    )
+    return Qt.rgba(s.r + (l.r - s.r) * t, s.g + (l.g - s.g) * t, s.b + (l.b - s.b) * t, 1)
+  }
+  readonly property color pillTrackColor: {
+    if (!root.pillVisible) return "transparent"
+    return Util.alpha(root.pillHue, root.barTransparent ? 0.64 : 0.12)
+  }
+  readonly property color pillFillColor: {
+    if (!root.pillVisible) return "transparent"
+    return Util.alpha(root.pillHue, root.barTransparent ? 0.88 : 0.28)
   }
 
   // ---- actions
