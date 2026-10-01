@@ -94,7 +94,7 @@ Item {
         text: root.next ? (root.next.title || "(Untitled)") : ""
         color: root.contentForeground
         font.family: root.contentFontFamily
-        font.pixelSize: Style.font.bodyLarge
+        font.pixelSize: Style.font.title
         font.bold: true
         wrapMode: Text.WordWrap
         maximumLineCount: 2

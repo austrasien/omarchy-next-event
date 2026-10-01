@@ -1960,6 +1960,14 @@ class DisplayFormatter {
     return labels.join(" · ")
   }
 
+  static remainingDurationLabel(minutesLeft) {
+    if (minutesLeft <= 1) return "1 min"
+    if (minutesLeft < MINUTES_PER_HOUR) return minutesLeft + " min"
+    var hours = Math.floor(minutesLeft / MINUTES_PER_HOUR)
+    var remainingMinutes = minutesLeft % MINUTES_PER_HOUR
+    return remainingMinutes > 0 ? hours + "h " + remainingMinutes + "m" : hours + "h"
+  }
+
   static relativeStatus(next, now, use12Hour) {
     if (!next || !next.start || !next.end || DisplayFormatter.isEventAllDay(next)) return ""
     var start = next.start.getTime()
@@ -1972,12 +1980,9 @@ class DisplayFormatter {
         : "starts in " + minutes + " min"
     }
     if (nowMs < end) {
-      var minutesLeft = Math.max(1, Math.round((end - nowMs) / MS_PER_MINUTE))
-      if (minutesLeft <= 1) return "1 min left"
-      if (minutesLeft < MINUTES_PER_HOUR) return minutesLeft + " min left"
-      var hours = Math.floor(minutesLeft / MINUTES_PER_HOUR)
-      var remainingMinutes = minutesLeft % MINUTES_PER_HOUR
-      return (remainingMinutes > 0 ? hours + "h " + remainingMinutes + "m" : hours + "h") + " left"
+      return DisplayFormatter.remainingDurationLabel(
+        Math.max(1, Math.round((end - nowMs) / MS_PER_MINUTE))
+      )
     }
     return ""
   }
@@ -2001,19 +2006,11 @@ class DisplayFormatter {
         suffix = " · " + DisplayFormatter.dayLabel(next.start, now) + " " + LABEL_ALL_DAY
       }
     } else if (nowMs >= start && nowMs < end) {
-      var minutesLeft = Math.max(1, Math.round((end - nowMs) / MS_PER_MINUTE))
-      if (minutesLeft <= 1) {
-        suffix = " · 1 min left"
-      } else if (minutesLeft < MINUTES_PER_HOUR) {
-        suffix = " · " + minutesLeft + " min left"
-      } else {
-        var hours = Math.floor(minutesLeft / MINUTES_PER_HOUR)
-        var remainingMinutes = minutesLeft % MINUTES_PER_HOUR
-        suffix =
-          " · " +
-          (remainingMinutes > 0 ? hours + "h " + remainingMinutes + "m" : hours + "h") +
-          " left"
-      }
+      suffix =
+        " · " +
+        DisplayFormatter.remainingDurationLabel(
+          Math.max(1, Math.round((end - nowMs) / MS_PER_MINUTE))
+        )
     } else if (start - nowMs <= MS_PER_HOUR && start > nowMs) {
       var minutesBefore = Math.max(1, Math.round((start - nowMs) / MS_PER_MINUTE))
       suffix = minutesBefore <= 1 ? " · in a min" : " · in " + minutesBefore + " min"
@@ -2082,6 +2079,49 @@ class DisplayFormatter {
     var label = DisplayFormatter.meetingTimeLabel(next.start, next.end, now, isAllDay, use12Hour)
     var status = DisplayFormatter.relativeStatus(next, now, use12Hour)
     return status ? label + " · " + status : label
+  }
+
+  // 0 at event start, 1 at event end. Outside the interval: 0 before, 1 after.
+  static timestampMs(value) {
+    if (value == null) return NaN
+    if (typeof value === "number") return value
+    if (typeof value.getTime === "function") {
+      var ms = value.getTime()
+      return typeof ms === "number" ? ms : NaN
+    }
+    var parsed = Date.parse(String(value))
+    return parsed
+  }
+
+  static eventProgress(event, now) {
+    if (!event) return 0
+    var start = DisplayFormatter.timestampMs(event.start)
+    var end = DisplayFormatter.timestampMs(event.end)
+    if (isNaN(start) || isNaN(end)) return 0
+    var duration = end - start
+    if (duration <= 0) return 0
+    var nowMs = DisplayFormatter.timestampMs(now)
+    if (isNaN(nowMs)) return 0
+    if (nowMs <= start) return 0
+    if (nowMs >= end) return 1
+    return (nowMs - start) / duration
+  }
+
+  // Fill of the soon-phase pill from the first time this event's chip was
+  // drawn (`originMs`) until start. A 1 h gap between meetings fills over
+  // that hour, not over announceLeadHours.
+  static pillProgress(event, now, originMs) {
+    if (!event) return 0
+    var start = DisplayFormatter.timestampMs(event.start)
+    if (isNaN(start)) return 0
+    var nowMs = DisplayFormatter.timestampMs(now)
+    if (isNaN(nowMs)) return 0
+    if (nowMs >= start) return 1
+    var origin = DisplayFormatter.timestampMs(originMs)
+    if (isNaN(origin) || origin <= 0) return 0
+    if (origin >= start) return 0
+    if (nowMs <= origin) return 0
+    return (nowMs - origin) / (start - origin)
   }
 
   // Hours ahead to show the next event on the bar. 0 = always show.
@@ -2314,6 +2354,12 @@ function normalizeAnnounceLeadHours(value) {
   if (isNaN(n) || n < 0) return DEFAULT_ANNOUNCE_LEAD_HOURS
   return n
 }
+function eventProgress(event, now) {
+  return DisplayFormatter.eventProgress(event, now)
+}
+function pillProgress(event, now, originMs) {
+  return DisplayFormatter.pillProgress(event, now, originMs)
+}
 function shouldAnnounceOnBar(next, now, announceLeadHours) {
   return DisplayFormatter.shouldAnnounceOnBar(next, now, announceLeadHours)
 }
@@ -2438,6 +2484,8 @@ if (typeof module !== "undefined" && module.exports) {
     timeRange: timeRange,
     meetingTimeLabel: meetingTimeLabel,
     normalizeAnnounceLeadHours: normalizeAnnounceLeadHours,
+    eventProgress: eventProgress,
+    pillProgress: pillProgress,
     shouldAnnounceOnBar: shouldAnnounceOnBar,
     barLabel: barLabel,
     headerStatus: headerStatus,

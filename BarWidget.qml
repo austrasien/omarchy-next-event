@@ -32,10 +32,15 @@ BarWidget {
     return icsFeeds.length > 0
   }
   readonly property string eventsJsonPath: String(setting("eventsJsonPath", (Quickshell.env("HOME") || "") + "/.local/state/omarchy/calendar-events.json") || "").trim()
+  // Host injects the layout entry (always has `id`). Until then settings is
+  // `{}` and icsFeeds looks empty — do not infer JSON/OAuth sync from that.
+  readonly property bool settingsBound: !!(settings && (settings.id || settings.icsUrl != null || settings.sourceMode))
   readonly property string sourceMode: {
     var explicit = settings && settings.sourceMode != null ? String(settings.sourceMode).trim() : ""
     if (explicit) return explicit
-    return icsFeeds.length > 0 ? Model.SOURCE_MODE_ICS : Model.SOURCE_MODE_JSON
+    if (icsFeeds.length > 0) return Model.SOURCE_MODE_ICS
+    if (!settingsBound) return Model.SOURCE_MODE_ICS
+    return Model.SOURCE_MODE_JSON
   }
   readonly property int refreshMinutes: Math.max(1, parseInt(setting("refreshMinutes", Model.DEFAULT_REFRESH_MINUTES), 10) || Model.DEFAULT_REFRESH_MINUTES)
   readonly property int showDaysAhead: Math.max(1, parseInt(setting("showDaysAhead", Model.DEFAULT_LOOKAHEAD_DAYS), 10) || Model.DEFAULT_LOOKAHEAD_DAYS)
@@ -79,6 +84,8 @@ BarWidget {
   property var scheduleGroups: []
   property var calendarLegend: []
   property var nextMeeting: null
+  property string pillEventKey: ""
+  property double pillShownAtMs: 0
   property date lastUpdated: new Date(0)
   property bool lastFetchFailed: false
   // Number of feeds that failed on the last fetch while *some* succeeded;
@@ -105,17 +112,31 @@ BarWidget {
   // Title is on the bar only inside announceLeadHours (or while live).
   readonly property bool announcingSoon: root.label !== "" && !root.inMeeting
   readonly property color sampledForeground: bar ? bar.barForeground : Color.foreground
-  // Transparent bar: punchier dark red / burnt orange (Qt.darker turns
-  // urgent into brown). Opaque bar keeps the theme accent / urgent as-is.
-  readonly property color soonColor: root.barTransparent ? "#9a3412" : Color.accent
+  // Transparent bar: bright orange for soon, dark red for live. These are
+  // pill washes (text stays barForeground). The old burnt `#9a3412` was a
+  // text color — at low alpha on a sky wallpaper it reads as grey.
+  readonly property color soonColor: root.barTransparent ? "#ea580c" : Color.accent
   readonly property color liveColor: root.barTransparent ? "#b91c1c" : (bar ? bar.urgent : Color.urgent)
-  readonly property bool feedColorOnBar: root.useCalendarColors && root.colorOnBar
-    && !!(root.nextMeeting && root.nextMeeting.calendarColor)
-  readonly property color barLabelColor: {
-    if (root.feedColorOnBar) return root.nextMeeting.calendarColor
-    if (root.inMeeting) return root.liveColor
-    if (root.announcingSoon) return root.soonColor
-    return root.sampledForeground
+  readonly property color barLabelColor: root.sampledForeground
+  readonly property int pillThickness: Math.max(16, (bar ? bar.barSize : Style.bar.sizeHorizontal) - Style.space(6))
+  readonly property int pillRadius: Style.cornerRadius > 0 ? Math.round(root.pillThickness * 0.32) : 0
+  readonly property real eventProgress: Model.eventProgress(root.nextMeeting, root.now)
+  readonly property real pillSoonProgress: Model.pillProgress(root.nextMeeting, root.now, root.pillShownAtMs)
+  readonly property bool pillVisible: root.inMeeting || root.announcingSoon
+  readonly property color pillTrackColor: {
+    if (!root.pillVisible) return "transparent"
+    if (root.inMeeting) return Util.alpha(root.liveColor, root.barTransparent ? 0.22 : 0.10)
+    return Util.alpha(root.soonColor, root.barTransparent ? 0.28 : 0.12)
+  }
+  readonly property color pillFillColor: {
+    if (root.inMeeting) return Util.alpha(root.liveColor, root.barTransparent ? 0.70 : 0.28)
+    var t = Math.max(0, Math.min(1, root.pillSoonProgress))
+    var s = root.soonColor
+    var l = root.liveColor
+    return Util.alpha(
+      Qt.rgba(s.r + (l.r - s.r) * t, s.g + (l.g - s.g) * t, s.b + (l.b - s.b) * t, 1),
+      root.barTransparent ? 0.70 : 0.28
+    )
   }
 
   // ---- actions
@@ -162,7 +183,7 @@ BarWidget {
         return
       }
       root.startNextFetch()
-    } else {
+    } else if (root.sourceMode === Model.SOURCE_MODE_JSON && root.settingsBound) {
       if (!syncProc.running) syncProc.running = true
     }
   }
@@ -230,7 +251,29 @@ BarWidget {
     root.nextMeeting = state.nextMeeting
     root.calendarLegend = state.calendarLegend || []
     if (lastUpdatedDate) root.lastUpdated = lastUpdatedDate
+    root.syncPillOrigin()
     root.meetingDataChanged()
+  }
+
+  function pillKey(ev) {
+    if (!ev) return ""
+    var uid = ev.uid ? String(ev.uid) : (ev.title ? String(ev.title) : "")
+    var start = ev.start && ev.start.getTime ? ev.start.getTime() : 0
+    return uid + "|" + start
+  }
+
+  function syncPillOrigin() {
+    if (!root.nextMeeting) {
+      root.pillEventKey = ""
+      root.pillShownAtMs = 0
+      return
+    }
+    if (!root.pillVisible) return
+    var key = root.pillKey(root.nextMeeting)
+    if (key !== root.pillEventKey) {
+      root.pillEventKey = key
+      root.pillShownAtMs = root.now.getTime()
+    }
   }
 
   function finishFetch() {
@@ -317,6 +360,8 @@ BarWidget {
   onMeetingDataChanged: {
     if (panelLoader.item) panelLoader.item.reload()
   }
+  onPillVisibleChanged: root.syncPillOrigin()
+  onNextMeetingChanged: root.syncPillOrigin()
 
   // Refetch the calendar on a schedule.
   Timer {
@@ -328,10 +373,10 @@ BarWidget {
     onTriggered: root.fetchCalendar()
   }
 
-  // Keep the countdown fresh.
+  // Keep the countdown and pill fill fresh while announced or live.
   Timer {
     id: nowTimer
-    interval: 30 * 1000
+    interval: root.pillVisible ? 1000 : 30 * 1000
     running: true
     repeat: true
     triggeredOnStart: true
@@ -339,6 +384,7 @@ BarWidget {
       root.now = new Date()
       root.recalc()
     }
+    onIntervalChanged: restart()
   }
 
   FileView {
@@ -395,15 +441,75 @@ BarWidget {
     }
   }
 
+  Rectangle {
+    id: pill
+    z: 0
+    anchors.centerIn: button
+    width: root.vertical ? root.pillThickness : button.width
+    height: root.vertical ? button.height : root.pillThickness
+    radius: root.pillRadius
+    color: root.pillTrackColor
+    visible: root.pillVisible
+    antialiasing: true
+    Behavior on color { ColorAnimation { duration: 180 } }
+
+    // Soon: fill right-to-left (bottom-to-top when the bar is vertical).
+    Item {
+      id: soonFillClip
+      width: root.vertical ? parent.width : parent.width * Math.max(0, Math.min(1, root.pillSoonProgress))
+      height: root.vertical ? parent.height * Math.max(0, Math.min(1, root.pillSoonProgress)) : parent.height
+      anchors.right: parent.right
+      anchors.bottom: parent.bottom
+      clip: true
+      visible: root.announcingSoon && root.pillSoonProgress > 0
+
+      Behavior on width { enabled: !root.vertical && root.announcingSoon; NumberAnimation { duration: 400; easing.type: Easing.Linear } }
+      Behavior on height { enabled: root.vertical && root.announcingSoon; NumberAnimation { duration: 400; easing.type: Easing.Linear } }
+
+      Rectangle {
+        width: pill.width
+        height: pill.height
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        radius: pill.radius
+        color: root.pillFillColor
+        antialiasing: true
+      }
+    }
+
+    // Live: fill left-to-right (top-to-bottom when the bar is vertical).
+    Item {
+      id: liveFillClip
+      width: root.vertical ? parent.width : parent.width * Math.max(0, Math.min(1, root.eventProgress))
+      height: root.vertical ? parent.height * Math.max(0, Math.min(1, root.eventProgress)) : parent.height
+      anchors.left: parent.left
+      anchors.top: parent.top
+      clip: true
+      visible: root.inMeeting && root.eventProgress > 0
+
+      Behavior on width { enabled: !root.vertical && root.inMeeting; NumberAnimation { duration: 400; easing.type: Easing.Linear } }
+      Behavior on height { enabled: root.vertical && root.inMeeting; NumberAnimation { duration: 400; easing.type: Easing.Linear } }
+
+      Rectangle {
+        width: pill.width
+        height: pill.height
+        radius: pill.radius
+        color: root.pillFillColor
+        antialiasing: true
+      }
+    }
+  }
+
   WidgetButton {
     id: button
+    z: 1
     anchors.fill: parent
     bar: root.bar
     text: root.label !== "" ? root.label : Model.ICON_CALENDAR_EMPTY
     foreground: root.barLabelColor
     labelVisible: false
     hasVisualContent: true
-    dimmed: root.label === ""
+    dimmed: false
     active: root.inMeeting
     useActiveColor: false
     horizontalMargin: 8.75
@@ -417,6 +523,7 @@ BarWidget {
       textFormat: Text.PlainText
       text: button.text
       color: root.barLabelColor
+      opacity: root.label === "" ? 0.7 : 1
       font.family: button.fontFamily
       font.pixelSize: button.fontSize
       style: root.barTransparent ? Text.Normal : Text.Outline

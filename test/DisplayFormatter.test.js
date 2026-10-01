@@ -130,6 +130,12 @@ describe("DisplayFormatter", () => {
         end: new Date(2026, 7, 28, 10, 0, 0)
       })
       assert.strictEqual(DisplayFormatter.relativeStatus(in5MinEvent, now, true), "starts in 5 min")
+
+      const liveEvent = new CalendarEvent({
+        start: new Date(2026, 7, 28, 8, 50, 0),
+        end: new Date(2026, 7, 28, 9, 20, 0)
+      })
+      assert.strictEqual(DisplayFormatter.relativeStatus(liveEvent, now, false), "20 min")
     })
   })
 
@@ -139,6 +145,15 @@ describe("DisplayFormatter", () => {
         DisplayFormatter.formatLabel(timedEvent, now, 30),
         "Sprint Review · in 60 min"
       )
+    })
+
+    it("formats an in-progress event as remaining duration without 'left'", () => {
+      const live = new CalendarEvent({
+        title: "Standup",
+        start: new Date(2026, 7, 28, 8, 50, 0),
+        end: new Date(2026, 7, 28, 9, 20, 0)
+      })
+      assert.strictEqual(DisplayFormatter.formatLabel(live, now, 30), "Standup · 20 min")
     })
 
     it("formats future timed event with 24-hour and 12-hour formats", () => {
@@ -240,7 +255,7 @@ describe("DisplayFormatter", () => {
       })
       assert.strictEqual(
         DisplayFormatter.barLabel(true, inProgress, now, 30, false, 3),
-        "  Sprint Review · 1h left"
+        "  Sprint Review · 1h"
       )
     })
 
@@ -366,6 +381,105 @@ describe("DisplayFormatter", () => {
         DisplayFormatter.heroTimeStatus(timedEvent, now, true),
         "Today · 10:00 AM–11:00 AM · starts at 10:00 AM"
       )
+    })
+  })
+
+  describe("eventProgress()", () => {
+    it("is 0 before start and 1 at or after end", () => {
+      assert.strictEqual(DisplayFormatter.eventProgress(timedEvent, now), 0)
+      assert.strictEqual(
+        DisplayFormatter.eventProgress(timedEvent, new Date(2026, 7, 28, 11, 0, 0)),
+        1
+      )
+      assert.strictEqual(
+        DisplayFormatter.eventProgress(timedEvent, new Date(2026, 7, 28, 12, 0, 0)),
+        1
+      )
+    })
+
+    it("is the elapsed fraction during the event", () => {
+      assert.strictEqual(
+        DisplayFormatter.eventProgress(timedEvent, new Date(2026, 7, 28, 10, 0, 0)),
+        0
+      )
+      assert.strictEqual(
+        DisplayFormatter.eventProgress(timedEvent, new Date(2026, 7, 28, 10, 30, 0)),
+        0.5
+      )
+      assert.strictEqual(
+        DisplayFormatter.eventProgress(timedEvent, new Date(2026, 7, 28, 10, 15, 0)),
+        0.25
+      )
+    })
+
+    it("returns 0 for missing event, missing dates, or non-positive duration", () => {
+      assert.strictEqual(DisplayFormatter.eventProgress(null, now), 0)
+      assert.strictEqual(DisplayFormatter.eventProgress({}, now), 0)
+      assert.strictEqual(
+        DisplayFormatter.eventProgress(
+          { start: timedEvent.start, end: timedEvent.start },
+          new Date(2026, 7, 28, 10, 30, 0)
+        ),
+        0
+      )
+    })
+
+    it("accepts epoch milliseconds and ISO strings for QML date round-trips", () => {
+      const mid = new Date(2026, 7, 28, 10, 30, 0)
+      assert.strictEqual(
+        DisplayFormatter.eventProgress(
+          { start: timedEvent.start.getTime(), end: timedEvent.end.getTime() },
+          mid.getTime()
+        ),
+        0.5
+      )
+      assert.strictEqual(
+        DisplayFormatter.eventProgress(
+          { start: timedEvent.start.toISOString(), end: timedEvent.end.toISOString() },
+          mid.toISOString()
+        ),
+        0.5
+      )
+    })
+  })
+
+  describe("pillProgress()", () => {
+    const originOneHour = new Date(2026, 7, 28, 9, 0, 0)
+
+    it("is 0 at first paint and 1 at or after start", () => {
+      assert.strictEqual(
+        DisplayFormatter.pillProgress(timedEvent, originOneHour, originOneHour),
+        0
+      )
+      assert.strictEqual(
+        DisplayFormatter.pillProgress(timedEvent, new Date(2026, 7, 28, 10, 0, 0), originOneHour),
+        1
+      )
+      assert.strictEqual(
+        DisplayFormatter.pillProgress(timedEvent, new Date(2026, 7, 28, 10, 30, 0), originOneHour),
+        1
+      )
+    })
+
+    it("fills over the time since the chip first appeared, not a fixed lead window", () => {
+      assert.strictEqual(
+        DisplayFormatter.pillProgress(timedEvent, new Date(2026, 7, 28, 9, 30, 0), originOneHour),
+        0.5
+      )
+      assert.strictEqual(
+        DisplayFormatter.pillProgress(
+          timedEvent,
+          new Date(2026, 7, 28, 9, 20, 0),
+          new Date(2026, 7, 28, 9, 0, 0)
+        ),
+        1 / 3
+      )
+    })
+
+    it("returns 0 until an origin is known", () => {
+      assert.strictEqual(DisplayFormatter.pillProgress(timedEvent, now, 0), 0)
+      assert.strictEqual(DisplayFormatter.pillProgress(timedEvent, now, null), 0)
+      assert.strictEqual(DisplayFormatter.pillProgress(null, now, originOneHour), 0)
     })
   })
 })

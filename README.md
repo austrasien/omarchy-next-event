@@ -42,7 +42,8 @@ NextEvent watches your calendars and surfaces the next actionable meeting in the
 ## ✨ Key Features
 
 ### 📅 Bar + agenda
-- Next event with live countdown (`in 15 min`, `15 min left`, `Tmrw 14:00`, …).
+- Next event with live countdown (`in 15 min`, `15 min`, `Tmrw 14:00`, …).
+- Spaces-style pill behind the chip when an event is soon or live (orange / red); idle is just the calendar glyph. Before the event the pill fills right-to-left from the moment that event’s chip first appears (a 1 h gap fills over 1 h, not over `announceLeadHours`); during a meeting it fills left-to-right in dark red. The title stays the same foreground as the clock.
 - Left click → agenda panel · Right click → join next meeting · Middle click → refresh.
 - Multi-day schedule, per-feed colors, all-day dots, calendar legend.
 
@@ -57,6 +58,7 @@ NextEvent watches your calendars and surfaces the next actionable meeting in the
 
 ### 🧩 This fork
 - `announceLeadHours` (settings stepper **Bar lead time**, `0` = always show title).
+- Spaces-style pill: fills right-to-left from first draw until start, left-to-right while live.
 - All-day events never steal the bar title when a lead time is set.
 - Outlined bar label only when the bar is opaque, so a transparent bar stays as readable as the clock.
 
