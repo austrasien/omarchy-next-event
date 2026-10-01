@@ -482,4 +482,27 @@ describe("DisplayFormatter", () => {
       assert.strictEqual(DisplayFormatter.pillProgress(null, now, originOneHour), 0)
     })
   })
+
+  describe("shouldBlinkOnBar()", () => {
+    it("is true in the last five minutes and false just outside", () => {
+      assert.equal(
+        DisplayFormatter.shouldBlinkOnBar(timedEvent, new Date(2026, 7, 28, 9, 55, 0), 5),
+        true
+      )
+      assert.equal(
+        DisplayFormatter.shouldBlinkOnBar(timedEvent, new Date(2026, 7, 28, 9, 54, 59), 5),
+        false
+      )
+    })
+
+    it("stops at start and ignores all-day events or a 0-minute setting", () => {
+      assert.equal(
+        DisplayFormatter.shouldBlinkOnBar(timedEvent, new Date(2026, 7, 28, 10, 0, 0), 5),
+        false
+      )
+      assert.equal(DisplayFormatter.shouldBlinkOnBar(allDayToday, now, 5), false)
+      assert.equal(DisplayFormatter.shouldBlinkOnBar(timedEvent, now, 0), false)
+      assert.equal(DisplayFormatter.shouldBlinkOnBar(null, now, 5), false)
+    })
+  })
 })

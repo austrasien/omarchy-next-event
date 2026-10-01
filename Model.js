@@ -16,6 +16,9 @@ var DAYS_PER_WEEK = 7
 var DEFAULT_REFRESH_MINUTES = 5
 var DEFAULT_LOOKAHEAD_DAYS = 3
 var DEFAULT_ANNOUNCE_LEAD_HOURS = 3
+var DEFAULT_BLINK_LEAD_MINUTES = 5
+// Same period as austraz.power's low-battery bar icon (`lowBatteryBlinkTimer`).
+var BLINK_INTERVAL_MS = 550
 var DEFAULT_MAX_TITLE_LENGTH = 28
 var MIN_MAX_TITLE_LENGTH = 8
 var MIN_TITLE_CHARS = 3
@@ -165,6 +168,8 @@ var Constants = {
   DEFAULT_REFRESH_MINUTES: DEFAULT_REFRESH_MINUTES,
   DEFAULT_LOOKAHEAD_DAYS: DEFAULT_LOOKAHEAD_DAYS,
   DEFAULT_ANNOUNCE_LEAD_HOURS: DEFAULT_ANNOUNCE_LEAD_HOURS,
+  DEFAULT_BLINK_LEAD_MINUTES: DEFAULT_BLINK_LEAD_MINUTES,
+  BLINK_INTERVAL_MS: BLINK_INTERVAL_MS,
   DEFAULT_MAX_TITLE_LENGTH: DEFAULT_MAX_TITLE_LENGTH,
   MIN_MAX_TITLE_LENGTH: MIN_MAX_TITLE_LENGTH,
   MIN_TITLE_CHARS: MIN_TITLE_CHARS,
@@ -2139,6 +2144,21 @@ class DisplayFormatter {
     return start - nowMs <= hours * MS_PER_HOUR
   }
 
+  // Hard on/off blink of the bar pill when the next timed event is within
+  // `blinkLeadMinutes`. 0 disables. Already-started and all-day events never
+  // blink — those are not a countdown.
+  static shouldBlinkOnBar(next, now, blinkLeadMinutes) {
+    if (!next || !next.start) return false
+    if (DisplayFormatter.isEventAllDay(next)) return false
+    var minutes = parseInt(blinkLeadMinutes, 10)
+    if (!minutes || minutes <= 0) return false
+    var nowMs = DisplayFormatter.timestampMs(now)
+    var start = DisplayFormatter.timestampMs(next.start)
+    if (isNaN(nowMs) || isNaN(start)) return false
+    if (nowMs >= start) return false
+    return start - nowMs <= minutes * MS_PER_MINUTE
+  }
+
   static barLabel(configured, nextMeeting, now, maxTitleLength, use12Hour, announceLeadHours) {
     if (!configured || !nextMeeting) return ""
     if (!DisplayFormatter.shouldAnnounceOnBar(nextMeeting, now, announceLeadHours)) return ""
@@ -2354,6 +2374,12 @@ function normalizeAnnounceLeadHours(value) {
   if (isNaN(n) || n < 0) return DEFAULT_ANNOUNCE_LEAD_HOURS
   return n
 }
+function normalizeBlinkLeadMinutes(value) {
+  if (value === "" || value === null || value === undefined) return DEFAULT_BLINK_LEAD_MINUTES
+  var n = parseInt(value, 10)
+  if (isNaN(n) || n < 0) return DEFAULT_BLINK_LEAD_MINUTES
+  return n
+}
 function eventProgress(event, now) {
   return DisplayFormatter.eventProgress(event, now)
 }
@@ -2362,6 +2388,9 @@ function pillProgress(event, now, originMs) {
 }
 function shouldAnnounceOnBar(next, now, announceLeadHours) {
   return DisplayFormatter.shouldAnnounceOnBar(next, now, announceLeadHours)
+}
+function shouldBlinkOnBar(next, now, blinkLeadMinutes) {
+  return DisplayFormatter.shouldBlinkOnBar(next, now, blinkLeadMinutes)
 }
 function barLabel(configured, nextMeeting, now, maxTitleLength, use12Hour, announceLeadHours) {
   return DisplayFormatter.barLabel(
@@ -2484,9 +2513,11 @@ if (typeof module !== "undefined" && module.exports) {
     timeRange: timeRange,
     meetingTimeLabel: meetingTimeLabel,
     normalizeAnnounceLeadHours: normalizeAnnounceLeadHours,
+    normalizeBlinkLeadMinutes: normalizeBlinkLeadMinutes,
     eventProgress: eventProgress,
     pillProgress: pillProgress,
     shouldAnnounceOnBar: shouldAnnounceOnBar,
+    shouldBlinkOnBar: shouldBlinkOnBar,
     barLabel: barLabel,
     headerStatus: headerStatus,
     tooltipLine: tooltipLine,

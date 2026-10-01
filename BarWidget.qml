@@ -45,6 +45,7 @@ BarWidget {
   readonly property int refreshMinutes: Math.max(1, parseInt(setting("refreshMinutes", Model.DEFAULT_REFRESH_MINUTES), 10) || Model.DEFAULT_REFRESH_MINUTES)
   readonly property int showDaysAhead: Math.max(1, parseInt(setting("showDaysAhead", Model.DEFAULT_LOOKAHEAD_DAYS), 10) || Model.DEFAULT_LOOKAHEAD_DAYS)
   readonly property int announceLeadHours: Model.normalizeAnnounceLeadHours(setting("announceLeadHours", Model.DEFAULT_ANNOUNCE_LEAD_HOURS))
+  readonly property int blinkLeadMinutes: Model.normalizeBlinkLeadMinutes(setting("blinkLeadMinutes", Model.DEFAULT_BLINK_LEAD_MINUTES))
   readonly property int maxTitleLength: Math.max(Model.MIN_MAX_TITLE_LENGTH, parseInt(setting("maxTitleLength", Model.DEFAULT_MAX_TITLE_LENGTH), 10) || Model.DEFAULT_MAX_TITLE_LENGTH)
   readonly property string timeFormat: String(setting("timeFormat", Model.DEFAULT_TIME_FORMAT) || Model.DEFAULT_TIME_FORMAT).trim()
   readonly property bool use12Hour: Model.is12Hour(timeFormat)
@@ -111,6 +112,8 @@ BarWidget {
     && root.now.getTime() < nextMeeting.end.getTime()
   // Title is on the bar only inside announceLeadHours (or while live).
   readonly property bool announcingSoon: root.label !== "" && !root.inMeeting
+  readonly property bool imminent: root.announcingSoon && Model.shouldBlinkOnBar(root.nextMeeting, root.now, root.blinkLeadMinutes)
+  property bool blinkPhase: false
   readonly property color sampledForeground: bar ? bar.barForeground : Color.foreground
   // Transparent bar: bright orange for soon, dark red for live. These are
   // pill washes (text stays barForeground). The old burnt `#9a3412` was a
@@ -390,6 +393,16 @@ BarWidget {
     onIntervalChanged: restart()
   }
 
+  // Hard on/off, same interval as austraz.power `lowBatteryBlinkTimer`.
+  Timer {
+    id: imminentBlinkTimer
+    interval: Model.BLINK_INTERVAL_MS
+    repeat: true
+    running: root.imminent
+    onTriggered: root.blinkPhase = !root.blinkPhase
+    onRunningChanged: if (!running) root.blinkPhase = false
+  }
+
   FileView {
     id: jsonFileView
     path: root.sourceMode === "json" ? root.eventsJsonPath : ""
@@ -453,6 +466,8 @@ BarWidget {
     radius: root.pillRadius
     color: root.pillTrackColor
     visible: root.pillVisible
+    // Same 550 ms hard toggle as austraz.power's low-battery icon. Text stays.
+    opacity: root.imminent && root.blinkPhase ? 0 : 1
     antialiasing: true
     Behavior on color { ColorAnimation { duration: 180 } }
 

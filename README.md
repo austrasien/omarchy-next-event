@@ -43,7 +43,7 @@ NextEvent watches your calendars and surfaces the next actionable meeting in the
 
 ### 📅 Bar + agenda
 - Next event with live countdown (`in 15 min`, `15 min`, `Tmrw 14:00`, …).
-- Spaces-style pill behind the chip when an event is soon or live (orange / red); idle is just the calendar glyph. Before the event the pill fills right-to-left from the moment that event’s chip first appears (a 1 h gap fills over 1 h, not over `announceLeadHours`); during a meeting it fills left-to-right in dark red. Track and fill share one red — the unfilled side is the same colour, more transparent (a 28 % wash over a bright sky used to read as grey). The title stays the same foreground as the clock.
+- Spaces-style pill behind the chip when an event is soon or live (orange / red); idle is just the calendar glyph. Before the event the pill fills right-to-left from the moment that event’s chip first appears (a 1 h gap fills over 1 h, not over `announceLeadHours`); during a meeting it fills left-to-right in dark red. Track and fill share one red — the unfilled side is the same colour, more transparent (a 28 % wash over a bright sky used to read as grey). In the last `blinkLeadMinutes` (default **5**) the track and fill blink on/off at the same 550 ms tempo as the low-battery icon. The title stays the same foreground as the clock.
 - Left click → agenda panel · Right click → join next meeting · Middle click → refresh.
 - Multi-day schedule, per-feed colors, all-day dots, calendar legend.
 
@@ -58,6 +58,7 @@ NextEvent watches your calendars and surfaces the next actionable meeting in the
 
 ### 🧩 This fork
 - `announceLeadHours` (settings stepper **Bar lead time**, `0` = always show title).
+- `blinkLeadMinutes` (settings stepper **Blink before start**, default **5**, `0` = off): track + fill blink at the low-battery icon tempo.
 - Spaces-style pill: fills right-to-left from first draw until start, left-to-right while live. On a transparent bar the track is the fill red at lower alpha, not a grey wash.
 - All-day events never steal the bar title when a lead time is set.
 - Outlined bar label only when the bar is opaque, so a transparent bar stays as readable as the clock.
@@ -204,6 +205,7 @@ No sudo for the widget itself.
 | `icsUrl` | `""` | Secret iCal URL(s) — see **Connect Google Calendar** |
 | `eventsJsonPath` | `~/.local/state/omarchy/calendar-events.json` | OAuth / sync JSON state (Option B) |
 | `announceLeadHours` | `3` | Hours ahead to show the event **title** on the bar (`0` = always) |
+| `blinkLeadMinutes` | `5` | Minutes before start to blink the pill track + fill (`0` = off). Same 550 ms on/off as the low-battery icon. |
 | `refreshMinutes` | `5` | ICS refetch interval |
 | `showDaysAhead` | `3` | Agenda lookahead (days) |
 | `maxTitleLength` | `28` | Bar title truncation |

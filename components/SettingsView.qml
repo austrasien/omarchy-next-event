@@ -286,6 +286,19 @@ Item {
       }
 
       SettingStepper {
+        id: blinkLeadStepper
+        label: "Blink before start"
+        description: "Minutes before start to blink the pill (0 = off). Same tempo as the low-battery icon."
+        from: 0
+        to: 30
+        stepSize: 1
+        value: root.hostWidget ? root.hostWidget.blinkLeadMinutes : Model.DEFAULT_BLINK_LEAD_MINUTES
+        contentForeground: root.contentForeground
+        contentFontFamily: root.contentFontFamily
+        onModified: function(v) { root.settingChanged("blinkLeadMinutes", v) }
+      }
+
+      SettingStepper {
         id: maxTitleStepper
         label: "Max bar title length"
         description: "Maximum character length for the event title in the bar"

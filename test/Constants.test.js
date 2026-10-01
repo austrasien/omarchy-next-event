@@ -28,6 +28,9 @@ describe("Constants", () => {
       assert.strictEqual(Constants.MIN_MAX_TITLE_LENGTH, 8)
       assert.strictEqual(Constants.MIN_TITLE_CHARS, 3)
       assert.strictEqual(Constants.DEFAULT_REFRESH_MINUTES, 5)
+      assert.strictEqual(Constants.DEFAULT_ANNOUNCE_LEAD_HOURS, 3)
+      assert.strictEqual(Constants.DEFAULT_BLINK_LEAD_MINUTES, 5)
+      assert.strictEqual(Constants.BLINK_INTERVAL_MS, 550)
       assert.strictEqual(Constants.DEFAULT_MAX_FEED_SIZE_MIB, 10)
       assert.strictEqual(
         Constants.DEFAULT_CALENDAR_URL_BASE,
