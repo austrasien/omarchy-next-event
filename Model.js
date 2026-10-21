@@ -1862,6 +1862,29 @@ class ScheduleAggregator {
     return legend
   }
 
+  // The event the bar and hero focus on. When timed events overlap, the
+  // live one that started last wins, so a short slot inside a long block is
+  // never hidden: long, then short, then long again once the short ends.
+  static focusEvent(meetings, now) {
+    meetings = meetings || []
+    var nowMs = (now || new Date()).getTime()
+    var focus = null
+    for (var i = 0; i < meetings.length; i++) {
+      var ev = meetings[i]
+      if (!ev || !ev.start || !ev.end) continue
+      if (ScheduleAggregator.isEventAllDay(ev)) continue
+      var start = ev.start.getTime()
+      if (nowMs < start || nowMs >= ev.end.getTime()) continue
+      if (
+        !focus ||
+        start > focus.start.getTime() ||
+        (start === focus.start.getTime() && ev.end.getTime() < focus.end.getTime())
+      )
+        focus = ev
+    }
+    return focus || (meetings.length > 0 ? meetings[0] : null)
+  }
+
   static computeScheduleState(events, now, options) {
     events = events || []
     now = now || new Date()
@@ -1890,7 +1913,7 @@ class ScheduleAggregator {
       meetings: meetings,
       upcomingToday: upcomingTodayList,
       scheduleGroups: scheduleGroups,
-      nextMeeting: meetings.length > 0 ? meetings[0] : null,
+      nextMeeting: ScheduleAggregator.focusEvent(meetings, now),
       calendarLegend: calendarLegend
     }
   }

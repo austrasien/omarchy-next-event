@@ -161,5 +161,27 @@ describe("ScheduleAggregator", () => {
       assert.strictEqual(state.calendarLegend.length, 1)
       assert.strictEqual(state.calendarLegend[0].name, "Work")
     })
+
+    it("focuses a short event nested in a longer live one, then the long one again", () => {
+      const block = new CalendarEvent({
+        uid: "block",
+        title: "Workshop",
+        start: new Date(2026, 7, 28, 9, 0, 0),
+        end: new Date(2026, 7, 28, 14, 0, 0),
+        allDay: false
+      })
+      const slot = new CalendarEvent({
+        uid: "slot",
+        title: "Call",
+        start: new Date(2026, 7, 28, 11, 0, 0),
+        end: new Date(2026, 7, 28, 11, 30, 0),
+        allDay: false
+      })
+      const at = (h, m) => ScheduleAggregator.computeScheduleState([block, slot], new Date(2026, 7, 28, h, m, 0), { lookaheadDays: 3 }).nextMeeting.title
+      assert.strictEqual(at(10, 0), "Workshop")
+      assert.strictEqual(at(11, 0), "Call")
+      assert.strictEqual(at(11, 15), "Call")
+      assert.strictEqual(at(11, 30), "Workshop")
+    })
   })
 })
