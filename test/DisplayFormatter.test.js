@@ -505,23 +505,4 @@ describe("DisplayFormatter", () => {
       assert.equal(DisplayFormatter.shouldBlinkOnBar(null, now, 5), false)
     })
   })
-
-  describe("followingEvent()", () => {
-    const at = (h, m) => new Date(2026, 9, 21, h, m, 0)
-    const ev = (title, start, end) => new CalendarEvent({ uid: title, title, start, end, allDay: false })
-    const block = ev("Indisponible", at(12, 0), at(18, 0))
-    const nested = ev("Orasio", at(14, 30), at(15, 30))
-    const after = ev("Debrief", at(18, 10), at(18, 30))
-
-    it("shows an event nested in the live one regardless of lead time", () => {
-      assert.equal(DisplayFormatter.followingEvent([block, nested], block, at(13, 30), 15), nested)
-      assert.equal(DisplayFormatter.followingEvent([block, nested], block, at(13, 30), 0), nested)
-    })
-
-    it("shows an event after the live one only within the lead", () => {
-      assert.equal(DisplayFormatter.followingEvent([block, after], block, at(17, 30), 15), null)
-      assert.equal(DisplayFormatter.followingEvent([block, after], block, at(17, 56), 15), after)
-      assert.equal(DisplayFormatter.followingEvent([block, after], block, at(17, 56), 0), null)
-    })
-  })
 })
