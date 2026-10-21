@@ -1862,6 +1862,65 @@ class ScheduleAggregator {
     return legend
   }
 
+  // Overlapping timed events read as a sequence: an event yields to any
+  // event that starts later (or at the same time and ends sooner) for that
+  // span, then resumes. A 12:00-18:00 block holding a 14:30-15:30 call becomes
+  // block 12:00-14:30, call, block 15:30-18:00 — nothing is hidden. Each
+  // piece is a copy of the event with its own start/end.
+  static splitOverlaps(events) {
+    events = events || []
+    var timed = []
+    var result = []
+    for (var i = 0; i < events.length; i++) {
+      var ev = events[i]
+      if (ev && ev.start && ev.end && !ScheduleAggregator.isEventAllDay(ev)) timed.push(ev)
+      else result.push(ev)
+    }
+    timed.sort(function (a, b) {
+      return a.start.getTime() - b.start.getTime()
+    })
+    for (var j = 0; j < timed.length; j++) {
+      var event = timed[j]
+      var startMs = event.start.getTime()
+      var endMs = event.end.getTime()
+      // Spans taken over by events that win against this one.
+      var cuts = []
+      for (var k = 0; k < timed.length; k++) {
+        var other = timed[k]
+        var otherStart = other.start.getTime()
+        if (otherStart >= endMs) break
+        var otherEnd = other.end.getTime()
+        if (other === event || otherEnd <= startMs) continue
+        var wins = otherStart > startMs || (otherStart === startMs && otherEnd < endMs)
+        if (wins) cuts.push([Math.max(otherStart, startMs), Math.min(otherEnd, endMs)])
+      }
+      if (cuts.length === 0) {
+        result.push(event)
+        continue
+      }
+      cuts.sort(function (a, b) {
+        return a[0] - b[0]
+      })
+      var cursor = startMs
+      for (var c = 0; c < cuts.length; c++) {
+        if (cuts[c][0] > cursor) result.push(ScheduleAggregator.eventSegment(event, cursor, cuts[c][0]))
+        cursor = Math.max(cursor, cuts[c][1])
+      }
+      if (cursor < endMs) result.push(ScheduleAggregator.eventSegment(event, cursor, endMs))
+    }
+    return result
+  }
+
+  static eventSegment(event, startMs, endMs) {
+    var copy = Object.create(Object.getPrototypeOf(event))
+    for (var key in event) {
+      if (Object.prototype.hasOwnProperty.call(event, key)) copy[key] = event[key]
+    }
+    copy.start = new Date(startMs)
+    copy.end = new Date(endMs)
+    return copy
+  }
+
   // The event the bar and hero focus on. When timed events overlap, the
   // live one that started last wins, so a short slot inside a long block is
   // never hidden: long, then short, then long again once the short ends.
@@ -1886,7 +1945,7 @@ class ScheduleAggregator {
   }
 
   static computeScheduleState(events, now, options) {
-    events = events || []
+    events = ScheduleAggregator.splitOverlaps(events)
     now = now || new Date()
     options = options || {}
     var lookaheadDays = options.lookaheadDays || DEFAULT_LOOKAHEAD_DAYS

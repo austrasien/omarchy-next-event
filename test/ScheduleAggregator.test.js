@@ -184,4 +184,44 @@ describe("ScheduleAggregator", () => {
       assert.strictEqual(at(11, 30), "Workshop")
     })
   })
+
+  describe("splitOverlaps()", () => {
+    const at = (h, m) => new Date(2026, 9, 21, h, m, 0)
+    const ev = (title, start, end) => new CalendarEvent({ uid: title, title, start, end, allDay: false })
+    const spans = (events) =>
+      ScheduleAggregator.splitOverlaps(events)
+        .sort((a, b) => a.start - b.start)
+        .map((e) => `${e.title} ${e.start.getHours()}:${e.start.getMinutes()}-${e.end.getHours()}:${e.end.getMinutes()}`)
+
+    it("cuts a long event around a nested one", () => {
+      assert.deepStrictEqual(spans([ev("A", at(12, 0), at(18, 0)), ev("B", at(14, 30), at(15, 30))]), [
+        "A 12:0-14:30",
+        "B 14:30-15:30",
+        "A 15:30-18:0"
+      ])
+    })
+
+    it("hands over at the later start on a partial overlap", () => {
+      assert.deepStrictEqual(spans([ev("A", at(12, 0), at(14, 0)), ev("B", at(13, 0), at(15, 0))]), [
+        "A 12:0-13:0",
+        "B 13:0-15:0"
+      ])
+    })
+
+    it("lets the shorter of two same-start events go first", () => {
+      assert.deepStrictEqual(spans([ev("A", at(12, 0), at(14, 0)), ev("B", at(12, 0), at(13, 0))]), [
+        "B 12:0-13:0",
+        "A 13:0-14:0"
+      ])
+    })
+
+    it("keeps the original event untouched and the next event announced after the cut", () => {
+      const block = ev("A", at(12, 0), at(18, 0))
+      const call = ev("B", at(14, 30), at(15, 30))
+      const state = ScheduleAggregator.computeScheduleState([block, call], at(13, 30), { lookaheadDays: 3 })
+      assert.strictEqual(state.nextMeeting.title, "A")
+      assert.strictEqual(state.nextMeeting.end.getTime(), at(14, 30).getTime())
+      assert.strictEqual(block.end.getTime(), at(18, 0).getTime())
+    })
+  })
 })
