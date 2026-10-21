@@ -46,6 +46,7 @@ BarWidget {
   readonly property int showDaysAhead: Math.max(1, parseInt(setting("showDaysAhead", Model.DEFAULT_LOOKAHEAD_DAYS), 10) || Model.DEFAULT_LOOKAHEAD_DAYS)
   readonly property int announceLeadHours: Model.normalizeAnnounceLeadHours(setting("announceLeadHours", Model.DEFAULT_ANNOUNCE_LEAD_HOURS))
   readonly property int blinkLeadMinutes: Model.normalizeBlinkLeadMinutes(setting("blinkLeadMinutes", Model.DEFAULT_BLINK_LEAD_MINUTES))
+  readonly property int followingLeadMinutes: Model.normalizeFollowingLeadMinutes(setting("followingLeadMinutes", Model.DEFAULT_FOLLOWING_LEAD_MINUTES))
   readonly property int maxTitleLength: Math.max(Model.MIN_MAX_TITLE_LENGTH, parseInt(setting("maxTitleLength", Model.DEFAULT_MAX_TITLE_LENGTH), 10) || Model.DEFAULT_MAX_TITLE_LENGTH)
   readonly property string timeFormat: String(setting("timeFormat", Model.DEFAULT_TIME_FORMAT) || Model.DEFAULT_TIME_FORMAT).trim()
   readonly property bool use12Hour: Model.is12Hour(timeFormat)
@@ -110,6 +111,15 @@ BarWidget {
     && nextMeeting.start && nextMeeting.end
     && root.now.getTime() >= nextMeeting.start.getTime()
     && root.now.getTime() < nextMeeting.end.getTime()
+  // While live, the next timed event within followingLeadMinutes gets its
+  // own chip to the right (below on a vertical bar).
+  readonly property var followingMeeting: root.inMeeting ? Model.followingEvent(root.meetings, root.nextMeeting, root.now, root.followingLeadMinutes) : null
+  readonly property bool showFollowing: !!root.followingMeeting
+  readonly property string followingLabel: root.showFollowing
+    ? (root.followingMeeting.meetUrl ? Model.ICON_MEETING_VIDEO : Model.ICON_CALENDAR_EVENT) + "  " + Model.formatLabel(root.followingMeeting, root.now, root.maxTitleLength, root.use12Hour)
+    : ""
+  readonly property bool followingImminent: root.showFollowing && Model.shouldBlinkOnBar(root.followingMeeting, root.now, root.blinkLeadMinutes)
+  readonly property int chipGap: Style.space(2)
   // Title is on the bar only inside announceLeadHours (or while live).
   readonly property bool announcingSoon: root.label !== "" && !root.inMeeting
   readonly property bool imminent: root.announcingSoon && Model.shouldBlinkOnBar(root.nextMeeting, root.now, root.blinkLeadMinutes)
@@ -354,8 +364,12 @@ BarWidget {
     if ("hostWidget" in target) target.hostWidget = root
   }
 
-  implicitWidth: button.implicitWidth
-  implicitHeight: button.implicitHeight
+  implicitWidth: root.vertical
+    ? Math.max(button.implicitWidth, root.showFollowing ? followingButton.implicitWidth : 0)
+    : button.implicitWidth + (root.showFollowing ? root.chipGap + followingButton.implicitWidth : 0)
+  implicitHeight: root.vertical
+    ? button.implicitHeight + (root.showFollowing ? root.chipGap + followingButton.implicitHeight : 0)
+    : Math.max(button.implicitHeight, root.showFollowing ? followingButton.implicitHeight : 0)
 
   onBarChanged: injectPanel()
   onSettingsChanged: {
@@ -398,7 +412,7 @@ BarWidget {
     id: imminentBlinkTimer
     interval: Model.BLINK_INTERVAL_MS
     repeat: true
-    running: root.imminent
+    running: root.imminent || root.followingImminent
     onTriggered: root.blinkPhase = !root.blinkPhase
     onRunningChanged: if (!running) root.blinkPhase = false
   }
@@ -521,7 +535,10 @@ BarWidget {
   WidgetButton {
     id: button
     z: 1
-    anchors.fill: parent
+    x: 0
+    y: 0
+    width: root.vertical ? root.width : button.implicitWidth
+    height: root.vertical ? button.implicitHeight : root.height
     bar: root.bar
     text: root.label !== "" ? root.label : Model.ICON_CALENDAR_EMPTY
     foreground: root.barLabelColor
@@ -555,6 +572,71 @@ BarWidget {
     onPressed: function(b) {
       if (b === Qt.RightButton) {
         if (root.nextMeeting && root.nextMeeting.meetUrl) root.joinMeeting(root.nextMeeting)
+        else root.toggle()
+      } else if (b === Qt.MiddleButton) {
+        root.refresh()
+      } else {
+        root.toggle()
+      }
+    }
+  }
+
+  // Next event while one is live: soon-coloured pill, no fill, blinks in
+  // the last blinkLeadMinutes like the main chip.
+  Rectangle {
+    id: followingPill
+    z: 0
+    anchors.centerIn: followingButton
+    width: root.vertical ? root.pillThickness : followingButton.width
+    height: root.vertical ? followingButton.height : root.pillThickness
+    radius: root.pillRadius
+    color: Util.alpha(root.soonColor, root.barTransparent ? 0.64 : 0.12)
+    visible: root.showFollowing
+    opacity: root.followingImminent && root.blinkPhase ? 0 : 1
+    antialiasing: true
+  }
+
+  WidgetButton {
+    id: followingButton
+    z: 1
+    visible: root.showFollowing
+    x: root.vertical ? 0 : button.width + root.chipGap
+    y: root.vertical ? button.height + root.chipGap : 0
+    width: root.vertical ? root.width : followingButton.implicitWidth
+    height: root.vertical ? followingButton.implicitHeight : root.height
+    bar: root.bar
+    text: root.followingLabel
+    foreground: root.barLabelColor
+    labelVisible: false
+    hasVisualContent: true
+    dimmed: false
+    useActiveColor: false
+    horizontalMargin: 8.75
+    verticalPadding: 8.75
+    tooltipText: root.showFollowing ? Model.tooltipLine(root.configured, root.followingMeeting, root.now, {
+      showCalendarLabel: root.showCalendarLabel,
+      use12Hour: root.use12Hour
+    }) : ""
+
+    Text {
+      anchors.centerIn: parent
+      enabled: false
+      textFormat: Text.PlainText
+      text: followingButton.text
+      color: root.barLabelColor
+      font.family: followingButton.fontFamily
+      font.pixelSize: followingButton.fontSize
+      style: root.barTransparent ? Text.Normal : Text.Outline
+      styleColor: "#000000"
+      renderType: root.barTransparent ? Text.NativeRendering : Text.QtRendering
+      rotation: followingButton.textRotation
+      horizontalAlignment: Text.AlignHCenter
+      verticalAlignment: Text.AlignVCenter
+    }
+
+    onPressed: function(b) {
+      if (b === Qt.RightButton) {
+        if (root.followingMeeting && root.followingMeeting.meetUrl) root.joinMeeting(root.followingMeeting)
         else root.toggle()
       } else if (b === Qt.MiddleButton) {
         root.refresh()
