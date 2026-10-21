@@ -2184,23 +2184,26 @@ class DisplayFormatter {
     return start - nowMs <= minutes * MS_PER_MINUTE
   }
 
-  // While `current` is live, the next timed event starting within
-  // `leadMinutes` — shown as a second chip right of the live one. 0 disables.
+  // While `current` is live, the next timed event — shown as a second chip
+  // right of the live one. An event starting before `current` ends is always
+  // shown (it would otherwise be hidden inside it); one starting after only
+  // within `leadMinutes` (0 disables that part).
   static followingEvent(meetings, current, now, leadMinutes) {
     if (!current || !current.start || !current.end) return null
     if (DisplayFormatter.isEventAllDay(current)) return null
-    var minutes = parseInt(leadMinutes, 10)
-    if (!minutes || minutes <= 0) return null
+    var minutes = Math.max(0, parseInt(leadMinutes, 10) || 0)
     var nowMs = DisplayFormatter.timestampMs(now)
     if (isNaN(nowMs)) return null
-    if (nowMs < current.start.getTime() || nowMs >= current.end.getTime()) return null
+    var endMs = current.end.getTime()
+    if (nowMs < current.start.getTime() || nowMs >= endMs) return null
     var best = null
     for (var i = 0; i < (meetings || []).length; i++) {
       var ev = meetings[i]
       if (!ev || ev === current || !ev.start) continue
       if (DisplayFormatter.isEventAllDay(ev)) continue
       var start = ev.start.getTime()
-      if (start <= nowMs || start - nowMs > minutes * MS_PER_MINUTE) continue
+      if (start <= nowMs) continue
+      if (start >= endMs && start - nowMs > minutes * MS_PER_MINUTE) continue
       if (!best || start < best.start.getTime()) best = ev
     }
     return best
