@@ -201,10 +201,22 @@ describe("ScheduleAggregator", () => {
       ])
     })
 
-    it("hands over at the later start on a partial overlap", () => {
+    it("hands over at the later start between equal-length events", () => {
       assert.deepStrictEqual(spans([ev("A", at(12, 0), at(14, 0)), ev("B", at(13, 0), at(15, 0))]), [
         "A 12:0-13:0",
         "B 13:0-15:0"
+      ])
+    })
+
+    it("lets the shorter event win a partial overlap", () => {
+      assert.deepStrictEqual(spans([ev("A", at(12, 0), at(14, 0)), ev("B", at(13, 0), at(16, 0))]), [
+        "A 12:0-14:0",
+        "B 14:0-16:0"
+      ])
+      assert.deepStrictEqual(spans([ev("A", at(12, 0), at(15, 0)), ev("B", at(13, 0), at(14, 0))]), [
+        "A 12:0-13:0",
+        "B 13:0-14:0",
+        "A 14:0-15:0"
       ])
     })
 

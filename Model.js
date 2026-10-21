@@ -1863,8 +1863,8 @@ class ScheduleAggregator {
   }
 
   // Overlapping timed events read as a sequence: an event yields to any
-  // event that starts later (or at the same time and ends sooner) for that
-  // span, then resumes. A 12:00-18:00 block holding a 14:30-15:30 call becomes
+  // shorter event (same length: the one starting later) for that span, then
+  // resumes. A 12:00-18:00 block holding a 14:30-15:30 call becomes
   // block 12:00-14:30, call, block 15:30-18:00 — nothing is hidden. Each
   // piece is a copy of the event with its own start/end.
   static splitOverlaps(events) {
@@ -1883,6 +1883,7 @@ class ScheduleAggregator {
       var event = timed[j]
       var startMs = event.start.getTime()
       var endMs = event.end.getTime()
+      var duration = endMs - startMs
       // Spans taken over by events that win against this one.
       var cuts = []
       for (var k = 0; k < timed.length; k++) {
@@ -1891,7 +1892,8 @@ class ScheduleAggregator {
         if (otherStart >= endMs) break
         var otherEnd = other.end.getTime()
         if (other === event || otherEnd <= startMs) continue
-        var wins = otherStart > startMs || (otherStart === startMs && otherEnd < endMs)
+        var otherDuration = otherEnd - otherStart
+        var wins = otherDuration < duration || (otherDuration === duration && otherStart > startMs)
         if (wins) cuts.push([Math.max(otherStart, startMs), Math.min(otherEnd, endMs)])
       }
       if (cuts.length === 0) {
