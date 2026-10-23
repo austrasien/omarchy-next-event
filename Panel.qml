@@ -74,9 +74,10 @@ Panel {
 
   function reload() {
     if (!root.hostWidget) return
-    root.scheduleGroups = root.hostWidget.scheduleGroups || []
-    root.calendarLegend = root.hostWidget.calendarLegend || []
     root.next = root.hostWidget.nextMeeting || null
+    // The hero card already shows the next event; keep it out of the list below.
+    root.scheduleGroups = Model.scheduleGroupsWithoutEvent(root.hostWidget.scheduleGroups || [], root.next)
+    root.calendarLegend = root.hostWidget.calendarLegend || []
 
     // The bar may hide the event *title* when nothing is within announceLeadHours.
     // The panel always shows the real agenda whenever calendars are configured.

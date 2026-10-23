@@ -117,6 +117,23 @@ describe("ScheduleAggregator", () => {
     })
   })
 
+  describe("withoutEvent()", () => {
+    it("removes the hero event from the list and drops days left empty", () => {
+      const groups = ScheduleAggregator.buildScheduleGroups([todayTimed1, tmrwTimed], now, {
+        lookaheadDays: 3
+      })
+      const filtered = ScheduleAggregator.withoutEvent(groups, todayTimed1)
+      assert.strictEqual(filtered.length, 1)
+      assert.strictEqual(filtered[0].items[0].title, "Saturday Sync")
+      assert.strictEqual(groups[0].items.length, 1, "input groups are not mutated")
+    })
+
+    it("returns the groups unchanged when there is no hero event", () => {
+      const groups = ScheduleAggregator.buildScheduleGroups([todayTimed1], now, { lookaheadDays: 3 })
+      assert.strictEqual(ScheduleAggregator.withoutEvent(groups, null), groups)
+    })
+  })
+
   describe("buildCalendarLegend()", () => {
     it("deduplicates calendars from events and preserves their colors", () => {
       const events = [

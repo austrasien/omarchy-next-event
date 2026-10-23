@@ -1836,6 +1836,35 @@ class ScheduleAggregator {
     return groups
   }
 
+  // Drops `event` from the day groups (the panel already shows it in the hero
+  // card) and removes any day left empty. Matches by reference, then by
+  // uid + start + end since QML may hand back wrapped copies.
+  static withoutEvent(groups, event) {
+    if (!event || !Array.isArray(groups)) return groups || []
+    var startMs = event.start ? event.start.getTime() : NaN
+    var endMs = event.end ? event.end.getTime() : NaN
+    function same(item) {
+      if (item === event) return true
+      if (!item || !event.uid || item.uid !== event.uid) return false
+      return (
+        !!item.start &&
+        !!item.end &&
+        item.start.getTime() === startMs &&
+        item.end.getTime() === endMs
+      )
+    }
+    var result = []
+    for (var i = 0; i < groups.length; i++) {
+      var group = groups[i]
+      var items = (group.items || []).filter(function (item) {
+        return !same(item)
+      })
+      if (items.length === 0) continue
+      result.push({ key: group.key, title: group.title, items: items })
+    }
+    return result
+  }
+
   static buildCalendarLegend(events, feeds) {
     var seen = {}
     var legend = []
@@ -2450,6 +2479,9 @@ function buildScheduleGroups(events, now, options) {
 function buildCalendarLegend(events, feeds) {
   return ScheduleAggregator.buildCalendarLegend(events, feeds)
 }
+function scheduleGroupsWithoutEvent(groups, event) {
+  return ScheduleAggregator.withoutEvent(groups, event)
+}
 function computeScheduleState(events, now, options) {
   return ScheduleAggregator.computeScheduleState(events, now, options)
 }
@@ -2621,6 +2653,7 @@ if (typeof module !== "undefined" && module.exports) {
     upcomingToday: upcomingToday,
     buildScheduleGroups: buildScheduleGroups,
     buildCalendarLegend: buildCalendarLegend,
+    scheduleGroupsWithoutEvent: scheduleGroupsWithoutEvent,
     computeScheduleState: computeScheduleState,
     findMeetUrl: findMeetUrl,
     meetLabel: meetLabel,
