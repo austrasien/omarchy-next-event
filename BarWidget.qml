@@ -268,7 +268,44 @@ BarWidget {
     root.calendarLegend = state.calendarLegend || []
     if (lastUpdatedDate) root.lastUpdated = lastUpdatedDate
     root.syncPillOrigin()
+    root.publishUpcoming()
     root.meetingDataChanged()
+  }
+
+  // The upcoming events, for the minimap's NextEvent map (minimap/Map.qml):
+  // it reads them here instead of fetching the feeds a second time, so the
+  // feed URLs never leave this widget. Private runtime dir, rewritten only
+  // when something changed.
+  readonly property string upcomingPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/next-event-upcoming.json"
+  property string publishedUpcoming: ""
+  function publishUpcoming() {
+    var list = []
+    var source = root.meetings || []
+    for (var i = 0; i < source.length && list.length < 8; i++) {
+      var ev = source[i]
+      if (!ev || !ev.start || !ev.end) continue
+      list.push({
+        title: String(ev.title || ""),
+        start: ev.start.getTime(),
+        end: ev.end.getTime(),
+        allDay: ev.allDay === true,
+        meetUrl: ev.meetUrl || "",
+        calendarUrl: Model.eventCalendarUrl(ev, root.calendarUrlBase) || "",
+        color: ev.calendarColor ? String(ev.calendarColor) : "",
+        label: ev.feedLabel ? String(ev.feedLabel) : ""
+      })
+    }
+    var text = JSON.stringify({ browserCommand: root.browserCommand, use12Hour: root.use12Hour, events: list })
+    if (text === root.publishedUpcoming) return
+    if (upcomingFile.path === "") { Qt.callLater(root.publishUpcoming); return }
+    root.publishedUpcoming = text
+    upcomingFile.setText(text)
+  }
+
+  FileView {
+    id: upcomingFile
+    path: root.upcomingPath
+    printErrors: false
   }
 
   function pillKey(ev) {
