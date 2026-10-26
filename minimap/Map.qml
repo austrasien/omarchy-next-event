@@ -244,12 +244,12 @@ Item {
     anchors.fill: parent
     visible: !!view.current && !view.live && !view.soon
     readonly property string text: view.status()
-    readonly property real r: view.w / 2 - 13
+    readonly property real r: view.w / 2 - 16
     readonly property real step: etaMetrics.advanceWidth / r
     TextMetrics {
       id: etaMetrics
       font.family: Style.fontFamily
-      font.pixelSize: Math.round(view.w * 0.065)
+      font.pixelSize: Math.round(view.w * 0.085)
       font.bold: true
       text: "M"
     }
@@ -270,8 +270,8 @@ Item {
 
   Column {
     anchors.centerIn: parent
-    anchors.verticalCenterOffset: eta.visible ? view.w * 0.03 : 0
-    width: view.w * 0.68
+    anchors.verticalCenterOffset: eta.visible ? view.w * 0.04 : 0
+    width: view.w * 0.72
     spacing: view.w * 0.015
     visible: !!view.current
 
@@ -301,20 +301,20 @@ Item {
       text: view.subline
       color: view.handover ? view.red : view.live || view.soon ? view.tint : Qt.alpha(Color.foreground, 0.6)
       font.family: Style.fontFamily
-      font.pixelSize: Math.round(view.w * 0.065)
-      font.bold: view.live || view.soon
+      font.pixelSize: Math.round(view.w * 0.085)
+      font.bold: true
     }
   }
 
   // "Join" under the pointer when there is a call.
   Text {
     anchors.horizontalCenter: parent.horizontalCenter
-    y: view.w * 0.83
+    y: view.w * 0.81
     visible: hover.hovered && !!view.current
     text: view.current && view.current.meetUrl ? "Join" : "Open"
     color: view.tint
     font.family: Style.fontFamily
-    font.pixelSize: Math.round(view.w * 0.055)
+    font.pixelSize: Math.round(view.w * 0.075)
     font.bold: true
   }
 
