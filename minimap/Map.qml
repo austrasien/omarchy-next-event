@@ -64,14 +64,16 @@ Item {
     }
     return live || next || allDay
   }
-  // What comes after the current one, for the line at the bottom.
-  readonly property var after: {
-    if (!current) return null
+  // The event right after the current one (starting before it ends, or
+  // within 15 minutes of its end): announced in red over its last quarter.
+  readonly property int followingMs: 15 * 60000
+  readonly property var following: {
+    if (!current || current.allDay) return null
     var best = null
     for (var i = 0; i < events.length; i++) {
       var ev = events[i]
-      if (ev === current || ev.allDay || ev.start < current.start) continue
-      if (ev.start === current.start && ev.title === current.title) continue
+      if (ev === current || ev.allDay || ev.start <= current.start) continue
+      if (ev.start > current.end + followingMs) continue
       if (!best || ev.start < best.start) best = ev
     }
     return best
@@ -82,6 +84,9 @@ Item {
   readonly property real untilMs: current ? current.start - nowMs : 0
   readonly property bool soon: !!current && !current.allDay && !live && untilMs <= soonMs
   readonly property bool imminent: soon && untilMs <= reminderMs
+  // From nine o'clock on the ring (the last quarter), the next one takes over.
+  readonly property bool handover: live && !!following && ring >= 0.75
+  readonly property color red: Color.urgent
   readonly property color tint: current && /^#[0-9a-fA-F]{6}$/.test(current.color) ? current.color : Color.accent
   readonly property real ring: !current || current.allDay ? 0
     : live ? (nowMs - current.start) / Math.max(1, current.end - current.start)
@@ -148,8 +153,10 @@ Item {
 
   function quote(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
   function open() {
-    if (!current) return
-    var url = current.meetUrl || current.calendarUrl
+    // The one in the middle: the next event once it has taken over.
+    var ev = shown
+    if (!ev) return
+    var url = ev.meetUrl || ev.calendarUrl
     if (!url) return
     var q = quote(url)
     var cmd = browserCommand !== "" ? browserCommand + " " + q + " || xdg-open " + q : "xdg-open " + q
@@ -157,6 +164,13 @@ Item {
   }
 
   // ---- face
+  //
+  // More than an hour ahead: when, along the inner edge at the top, and
+  // the title over its hours. Within the hour: a ring filling from noon
+  // round to noon as the start comes, the start time under the title.
+  // Under way: the ring is its progress, the end time under the title;
+  // with another event right after, the ring turns red from nine o'clock
+  // and the next title and start take the middle, in red.
   readonly property real w: width
   property real pulse: 1
   SequentialAnimation on pulse {
@@ -167,6 +181,15 @@ Item {
     onRunningChanged: if (!running) view.pulse = 1
   }
 
+  readonly property var shown: handover ? following : current
+  readonly property color ink: handover ? red : tint
+  readonly property string subline: !current ? ""
+    : handover ? "at " + clock(following.start)
+    : current.allDay ? "all day"
+    : live ? "until " + clock(current.end)
+    : soon ? "at " + clock(current.start)
+    : range(current)
+
   Rectangle {
     anchors.fill: parent
     color: Qt.darker(Color.background, 1.15)
@@ -174,13 +197,13 @@ Item {
   Rectangle {
     anchors.fill: parent
     radius: width / 2
-    color: Qt.alpha(view.tint, hover.hovered && view.current ? 0.2 : view.live ? 0.14 : 0.07)
+    color: Qt.alpha(view.ink, hover.hovered && view.current ? 0.2 : view.live ? 0.14 : 0.07)
     Behavior on color { ColorAnimation { duration: 150 } }
   }
 
   Shape {
     anchors.fill: parent
-    visible: !!view.current && !view.current.allDay
+    visible: view.live || view.soon
     preferredRendererType: Shape.CurveRenderer
     ShapePath {
       strokeColor: Qt.alpha(Color.foreground, 0.08)
@@ -192,45 +215,79 @@ Item {
       strokeColor: Qt.alpha(view.tint, view.pulse)
       strokeWidth: 6
       fillColor: "transparent"
-      capStyle: ShapePath.RoundCap
+      capStyle: ShapePath.FlatCap
       PathAngleArc {
         centerX: view.w / 2; centerY: view.w / 2
         radiusX: view.w / 2 - 4; radiusY: radiusX
         startAngle: -90
-        sweepAngle: 360 * Math.max(0, Math.min(1, view.ring))
+        sweepAngle: 360 * Math.max(0, Math.min(view.live && view.following ? 0.75 : 1, view.ring))
+      }
+    }
+    // The last quarter, red when the next event follows.
+    ShapePath {
+      strokeColor: view.red
+      strokeWidth: 6
+      fillColor: "transparent"
+      capStyle: ShapePath.FlatCap
+      PathAngleArc {
+        centerX: view.w / 2; centerY: view.w / 2
+        radiusX: view.w / 2 - 4; radiusY: radiusX
+        startAngle: 180
+        sweepAngle: view.handover ? 360 * Math.min(0.25, view.ring - 0.75) : 0
+      }
+    }
+  }
+
+  // When, along the inner edge, centred on noon and upright.
+  Item {
+    id: eta
+    anchors.fill: parent
+    visible: !!view.current && !view.live && !view.soon
+    readonly property string text: view.status()
+    readonly property real r: view.w / 2 - 13
+    readonly property real step: etaMetrics.advanceWidth / r
+    TextMetrics {
+      id: etaMetrics
+      font.family: Style.fontFamily
+      font.pixelSize: Math.round(view.w * 0.065)
+      font.bold: true
+      text: "M"
+    }
+    Repeater {
+      model: eta.text.length
+      delegate: Text {
+        required property int index
+        readonly property real a: -Math.PI / 2 + (index - (eta.text.length - 1) / 2) * eta.step
+        text: eta.text.charAt(index)
+        font: etaMetrics.font
+        color: view.tint
+        x: view.w / 2 + eta.r * Math.cos(a) - width / 2
+        y: view.w / 2 + eta.r * Math.sin(a) - height / 2
+        rotation: a * 180 / Math.PI + 90
       }
     }
   }
 
   Column {
     anchors.centerIn: parent
-    width: view.w * 0.7
-    spacing: view.w * 0.012
+    anchors.verticalCenterOffset: eta.visible ? view.w * 0.03 : 0
+    width: view.w * 0.68
+    spacing: view.w * 0.015
     visible: !!view.current
 
     Text {
       anchors.horizontalCenter: parent.horizontalCenter
-      text: String.fromCodePoint(view.current && view.current.meetUrl ? 0xF0567 : 0xF00ED)
-      color: view.tint
+      text: String.fromCodePoint(view.shown && view.shown.meetUrl ? 0xF0567 : 0xF00ED)
+      color: view.ink
       opacity: view.imminent ? view.pulse : 1
       font.family: Style.fontFamily
-      font.pixelSize: view.w * 0.12
+      font.pixelSize: view.w * 0.11
     }
     Text {
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
-      text: view.status()
-      color: view.live || view.soon ? view.tint : Qt.alpha(Color.foreground, 0.7)
-      font.family: Style.fontFamily
-      font.pixelSize: Math.round(view.w * 0.075)
-      font.bold: true
-      elide: Text.ElideRight
-    }
-    Text {
-      width: parent.width
-      horizontalAlignment: Text.AlignHCenter
-      text: view.current ? view.current.title : ""
-      color: Color.foreground
+      text: view.shown ? view.shown.title : ""
+      color: view.handover ? view.red : Color.foreground
       font.family: Style.fontFamily
       font.pixelSize: Math.round(view.w * 0.085)
       font.bold: true
@@ -241,27 +298,18 @@ Item {
     Text {
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
-      text: view.range(view.current)
-      color: Qt.alpha(Color.foreground, 0.6)
+      text: view.subline
+      color: view.handover ? view.red : view.live || view.soon ? view.tint : Qt.alpha(Color.foreground, 0.6)
       font.family: Style.fontFamily
-      font.pixelSize: Math.round(view.w * 0.06)
-    }
-    Text {
-      width: parent.width
-      horizontalAlignment: Text.AlignHCenter
-      visible: !!view.after
-      text: view.after ? "then " + view.clock(view.after.start) + " · " + view.after.title : ""
-      color: Qt.alpha(Color.foreground, 0.45)
-      font.family: Style.fontFamily
-      font.pixelSize: Math.round(view.w * 0.05)
-      elide: Text.ElideRight
+      font.pixelSize: Math.round(view.w * 0.065)
+      font.bold: view.live || view.soon
     }
   }
 
   // "Join" under the pointer when there is a call.
   Text {
     anchors.horizontalCenter: parent.horizontalCenter
-    y: view.w * 0.84
+    y: view.w * 0.83
     visible: hover.hovered && !!view.current
     text: view.current && view.current.meetUrl ? "Join" : "Open"
     color: view.tint
