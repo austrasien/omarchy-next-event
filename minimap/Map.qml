@@ -172,6 +172,7 @@ Item {
   // with another event right after, the ring turns red from nine o'clock
   // and the next title and start take the middle, in red.
   readonly property real w: width
+  readonly property real k: minimap.uiScale || 1   // fixed sizes are for a 210 px minimap
   property real pulse: 1
   SequentialAnimation on pulse {
     running: view.imminent || view.waiting
@@ -207,18 +208,18 @@ Item {
     preferredRendererType: Shape.CurveRenderer
     ShapePath {
       strokeColor: Qt.alpha(Color.foreground, 0.08)
-      strokeWidth: 6
+      strokeWidth: 6 * view.k
       fillColor: "transparent"
-      PathAngleArc { centerX: view.w / 2; centerY: view.w / 2; radiusX: view.w / 2 - 4; radiusY: radiusX; startAngle: 0; sweepAngle: 360 }
+      PathAngleArc { centerX: view.w / 2; centerY: view.w / 2; radiusX: view.w / 2 - 4 * view.k; radiusY: radiusX; startAngle: 0; sweepAngle: 360 }
     }
     ShapePath {
       strokeColor: Qt.alpha(view.tint, view.pulse)
-      strokeWidth: 6
+      strokeWidth: 6 * view.k
       fillColor: "transparent"
       capStyle: ShapePath.FlatCap
       PathAngleArc {
         centerX: view.w / 2; centerY: view.w / 2
-        radiusX: view.w / 2 - 4; radiusY: radiusX
+        radiusX: view.w / 2 - 4 * view.k; radiusY: radiusX
         startAngle: -90
         sweepAngle: 360 * Math.max(0, Math.min(view.live && view.following ? 0.75 : 1, view.ring))
       }
@@ -226,12 +227,12 @@ Item {
     // The last quarter, red when the next event follows.
     ShapePath {
       strokeColor: view.red
-      strokeWidth: 6
+      strokeWidth: 6 * view.k
       fillColor: "transparent"
       capStyle: ShapePath.FlatCap
       PathAngleArc {
         centerX: view.w / 2; centerY: view.w / 2
-        radiusX: view.w / 2 - 4; radiusY: radiusX
+        radiusX: view.w / 2 - 4 * view.k; radiusY: radiusX
         startAngle: 180
         sweepAngle: view.handover ? 360 * Math.min(0.25, view.ring - 0.75) : 0
       }
