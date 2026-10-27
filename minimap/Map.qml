@@ -259,7 +259,7 @@ Item {
     // The last quarter, red over the 15 minutes before the next event (or
     // before the one coming, with none under way).
     ShapePath {
-      strokeColor: view.red
+      strokeColor: Qt.alpha(view.red, view.pulse)   // blinks with the rest of the ring
       strokeWidth: 6 * view.k
       fillColor: "transparent"
       capStyle: ShapePath.FlatCap
