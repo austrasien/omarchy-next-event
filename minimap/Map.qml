@@ -39,7 +39,26 @@ Item {
   // The widget may write the file after the shell starts, and then no
   // watch is set: look again now and then.
   Timer { interval: 15000; running: true; repeat: true; onTriggered: file.reload() }
-  Timer { interval: 1000; running: true; repeat: true; onTriggered: view.nowMs = Date.now() }
+  // Every second while on screen (the countdown). Otherwise only at the
+  // next moment that changes something (the ring starting, the reminder,
+  // the start, the end of the start notice, the end), and at least once a
+  // minute.
+  readonly property bool onScreen: minimap.shownMap === "nextevent"
+  readonly property real nextWakeMs: {
+    var now = nowMs, next = now + 60000
+    if (current && !current.allDay) {
+      var marks = [current.start - soonMs, current.start - reminderMs, current.start,
+        current.start + reminderMs, current.end]
+      for (var i = 0; i < marks.length; i++) if (marks[i] > now && marks[i] < next) next = marks[i]
+    }
+    return Math.max(1000, next - now)
+  }
+  Timer {
+    interval: view.onScreen ? 1000 : view.nextWakeMs
+    running: true
+    repeat: true
+    onTriggered: view.nowMs = Date.now()
+  }
 
   function take(raw) {
     try {
