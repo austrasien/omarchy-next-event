@@ -47,7 +47,7 @@ Item {
   readonly property real nextWakeMs: {
     var now = nowMs, next = now + 60000
     if (current && !current.allDay) {
-      var marks = [current.start - soonMs, current.start - reminderMs, current.start,
+      var marks = [current.start - soonMs, current.start - followingMs, current.start - reminderMs, current.start,
         current.start + reminderMs, current.end]
       if (following) marks.push(handoverStart)
       for (var i = 0; i < marks.length; i++) if (marks[i] > now && marks[i] < next) next = marks[i]
@@ -110,6 +110,11 @@ Item {
   readonly property real handoverStart: following ? following.start - followingMs : 0
   readonly property bool handover: live && !!following && nowMs >= handoverStart
   readonly property real handoverLevel: handover ? Math.max(0, Math.min(1, 1 - (following.start - nowMs) / followingMs)) : 0
+  // Before an event the same way: its last 15 minutes to go in red on the
+  // ring's last quarter, nine o'clock at -15 min to noon at its start.
+  readonly property bool countdown: soon && untilMs <= followingMs
+  readonly property real redLevel: handover ? handoverLevel
+    : countdown ? Math.max(0, Math.min(1, 1 - untilMs / followingMs)) : 0
   readonly property color red: Color.urgent
   readonly property color tint: current && /^#[0-9a-fA-F]{6}$/.test(current.color) ? current.color : Color.accent
   readonly property real ring: !current || current.allDay ? 0
@@ -210,7 +215,7 @@ Item {
   }
 
   readonly property var shown: handover ? following : current
-  readonly property color ink: handover ? red : tint
+  readonly property color ink: handover || countdown ? red : tint
   readonly property string subline: !current ? ""
     : handover ? "at " + clock(following.start)
     : current.allDay ? "all day"
@@ -248,10 +253,11 @@ Item {
         centerX: view.w / 2; centerY: view.w / 2
         radiusX: view.w / 2 - 4 * view.k; radiusY: radiusX
         startAngle: -90
-        sweepAngle: 360 * Math.max(0, Math.min(1, view.ring))
+        sweepAngle: 360 * Math.max(0, Math.min(view.countdown ? 0.75 : 1, view.ring))
       }
     }
-    // The last quarter, red over the 15 minutes before the next event.
+    // The last quarter, red over the 15 minutes before the next event (or
+    // before the one coming, with none under way).
     ShapePath {
       strokeColor: view.red
       strokeWidth: 6 * view.k
@@ -261,7 +267,7 @@ Item {
         centerX: view.w / 2; centerY: view.w / 2
         radiusX: view.w / 2 - 4 * view.k; radiusY: radiusX
         startAngle: 180
-        sweepAngle: 90 * view.handoverLevel
+        sweepAngle: 90 * view.redLevel
       }
     }
   }
