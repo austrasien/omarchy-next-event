@@ -52,6 +52,11 @@ Item {
       if (following) marks.push(handoverStart)
       for (var i = 0; i < marks.length; i++) if (marks[i] > now && marks[i] < next) next = marks[i]
     }
+    // The heads-up of the next one, even with another under way.
+    if (upcoming) {
+      var heads = upcoming.start - reminderMs
+      if (heads > now && heads < next) next = heads
+    }
     return Math.max(1000, next - now)
   }
   Timer {
@@ -125,22 +130,34 @@ Item {
     : soon ? 1 - untilMs / soonMs : 0
 
   // ---- reminders
-  readonly property string focusKey: current ? current.start + "|" + current.title : ""
+  // The next timed event to start, whatever is under way: a slot right
+  // after another one gets its heads-up too (the face shows it then, as
+  // the event following the current one).
+  readonly property var upcoming: {
+    var now = nowMs, best = null
+    for (var i = 0; i < events.length; i++) {
+      var ev = events[i]
+      if (ev.allDay || ev.start <= now) continue
+      if (!best || ev.start < best.start) best = ev
+    }
+    return best
+  }
   property var told: ({})       // "<key>|soon" / "<key>|start" already shown
   property bool waiting: false  // the persistent start notification is up
 
-  function tell(kind) {
-    if (told[focusKey + "|" + kind]) return false
+  function tell(ev, kind) {
+    var key = ev.start + "|" + ev.title + "|" + kind
+    if (told[key]) return false
     var t = Object.assign({}, told)
-    t[focusKey + "|" + kind] = true
+    t[key] = true
     told = t
     return true
   }
 
   onNowMsChanged: {
+    if (upcoming && upcoming.start - nowMs <= reminderMs && tell(upcoming, "soon")) minimap.notify(view, 10000)
     if (!current || current.allDay) return
-    if (imminent && tell("soon")) minimap.notify(view, 10000)
-    if (live && nowMs - current.start < reminderMs && tell("start")) {
+    if (live && nowMs - current.start < reminderMs && tell(current, "start")) {
       waiting = true
       minimap.notify(view, 0, true)
     }
