@@ -323,7 +323,14 @@ BarWidget {
         description: String(item.description || "").slice(0, 800)
       })
     }
-    var text = JSON.stringify({ browserCommand: root.browserCommand, use12Hour: root.use12Hour, events: list, today: today })
+    var text = JSON.stringify({
+      browserCommand: root.browserCommand,
+      use12Hour: root.use12Hour,
+      lastUpdated: root.lastUpdated.getTime(),
+      refreshMinutes: root.refreshMinutes,
+      events: list,
+      today: today
+    })
     if (text === root.publishedUpcoming) { root.publishedKey = key; return }
     if (upcomingFile.path === "") { Qt.callLater(root.publishUpcoming); return }
     root.publishedKey = key
