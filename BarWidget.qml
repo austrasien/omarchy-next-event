@@ -295,7 +295,28 @@ BarWidget {
         label: ev.feedLabel ? String(ev.feedLabel) : ""
       })
     }
-    var text = JSON.stringify({ browserCommand: root.browserCommand, use12Hour: root.use12Hour, events: list })
+    // The rest of today, uncapped and with the details, for austraz.daytape.
+    var today = []
+    var todaySource = Model.buildUpcoming(root.rawEvents, root.now, {
+      lookaheadDays: 1,
+      showOnlyWithVideoLink: root.showOnlyWithVideoLink,
+      maxRows: 40
+    })
+    for (var j = 0; j < todaySource.length; j++) {
+      var item = todaySource[j]
+      if (!item || !item.start || !item.end) continue
+      today.push({
+        title: String(item.title || ""),
+        start: item.start.getTime(),
+        end: item.end.getTime(),
+        allDay: item.allDay === true,
+        meetUrl: item.meetUrl || "",
+        label: item.feedLabel ? String(item.feedLabel) : "",
+        location: String(item.location || "").slice(0, 200),
+        description: String(item.description || "").slice(0, 800)
+      })
+    }
+    var text = JSON.stringify({ browserCommand: root.browserCommand, use12Hour: root.use12Hour, events: list, today: today })
     if (text === root.publishedUpcoming) return
     if (upcomingFile.path === "") { Qt.callLater(root.publishUpcoming); return }
     root.publishedUpcoming = text
