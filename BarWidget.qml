@@ -254,6 +254,7 @@ BarWidget {
 
   function applyScheduleState(events, lastUpdatedDate) {
     root.rawEvents = events || []
+    if (lastUpdatedDate) root.eventsRevision++
     var state = Model.computeScheduleState(root.rawEvents, root.now, {
       lookaheadDays: root.showDaysAhead,
       showOnlyWithVideoLink: root.showOnlyWithVideoLink,
@@ -278,7 +279,13 @@ BarWidget {
   // when something changed.
   readonly property string upcomingPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/next-event-upcoming.json"
   property string publishedUpcoming: ""
+  // Publishing rebuilds and serialises the lists, and the clock ticks every
+  // second during a meeting: once per minute is enough, or on new events.
+  property int eventsRevision: 0
+  property string publishedKey: ""
   function publishUpcoming() {
+    var key = [root.eventsRevision, Math.floor(root.now.getTime() / 60000), root.browserCommand, root.use12Hour].join("|")
+    if (key === root.publishedKey) return
     var list = []
     var source = root.meetings || []
     for (var i = 0; i < source.length && list.length < 8; i++) {
@@ -317,8 +324,9 @@ BarWidget {
       })
     }
     var text = JSON.stringify({ browserCommand: root.browserCommand, use12Hour: root.use12Hour, events: list, today: today })
-    if (text === root.publishedUpcoming) return
+    if (text === root.publishedUpcoming) { root.publishedKey = key; return }
     if (upcomingFile.path === "") { Qt.callLater(root.publishUpcoming); return }
+    root.publishedKey = key
     root.publishedUpcoming = text
     upcomingFile.setText(text)
   }
