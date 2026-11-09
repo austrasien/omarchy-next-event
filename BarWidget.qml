@@ -302,9 +302,12 @@ BarWidget {
         label: ev.feedLabel ? String(ev.feedLabel) : ""
       })
     }
-    // The rest of today, uncapped and with the details, for austraz.daytape.
+    // All of today, finished events included, uncapped and with the details,
+    // for austraz.daytape.
     var today = []
-    var todaySource = Model.buildUpcoming(root.rawEvents, root.now, {
+    var midnight = new Date(root.now)
+    midnight.setHours(0, 0, 0, 0)
+    var todaySource = Model.buildUpcoming(root.rawEvents, midnight, {
       lookaheadDays: 1,
       showOnlyWithVideoLink: root.showOnlyWithVideoLink,
       maxRows: 40
