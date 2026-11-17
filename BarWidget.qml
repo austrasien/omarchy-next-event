@@ -237,7 +237,8 @@ BarWidget {
         maxEvents: 80,
         now: root.now,
         calendarColor: root.currentFeedColor,
-        feedLabel: root.currentFeedLabel
+        feedLabel: root.currentFeedLabel,
+        ownerEmails: [Model.icsFeedOwner(root.currentFeedUrl)]
       })
       for (var i = 0; i < events.length; i++) {
         if (root.currentFeedLabel) events[i].feedLabel = root.currentFeedLabel

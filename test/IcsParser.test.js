@@ -2,7 +2,7 @@
 
 const { describe, it } = require("node:test")
 const assert = require("node:assert/strict")
-const { IcsParser } = require("../Model.js")
+const { IcsParser, icsFeedOwner } = require("../Model.js")
 
 describe("IcsParser", () => {
   describe("unfoldIcs()", () => {
@@ -128,6 +128,93 @@ describe("IcsParser", () => {
       })
       assert.strictEqual(events2[0].calendarColor, "#4285f4")
       assert.strictEqual(events2[0].feedLabel, "Work")
+    })
+  })
+
+  describe("declined invitations", () => {
+    const NOW = new Date("2026-08-17T09:00:00Z")
+    const OWNER = "ATTENDEE;CUTYPE=INDIVIDUAL;PARTSTAT=%s;CN=me@example.com:mailto:me@example.com"
+    const OTHER = "ATTENDEE;PARTSTAT=%s;CN=you@example.com:mailto:you@example.com"
+
+    function feed(header, attendees, extra) {
+      return [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        ...header,
+        "BEGIN:VEVENT",
+        "UID:invite-1",
+        "DTSTART:20260817T140000Z",
+        "DTEND:20260817T150000Z",
+        "SUMMARY:Invite",
+        ...attendees,
+        "END:VEVENT",
+        ...(extra || []),
+        "END:VCALENDAR"
+      ].join("\r\n")
+    }
+
+    it("drops an event the owner named by X-WR-CALNAME declined", () => {
+      const ics = feed(["X-WR-CALNAME:Me@Example.com"], [OWNER.replace("%s", "DECLINED")])
+      assert.strictEqual(IcsParser.parse(ics, { now: NOW }).length, 0)
+    })
+
+    it("drops an event the owner given in options declined", () => {
+      const ics = feed(["X-WR-CALNAME:Perso"], [OWNER.replace("%s", "DECLINED")])
+      assert.strictEqual(IcsParser.parse(ics, { now: NOW }).length, 1)
+      const events = IcsParser.parse(ics, { now: NOW, ownerEmails: ["me@example.com"] })
+      assert.strictEqual(events.length, 0)
+    })
+
+    it("keeps an event the owner accepted while another attendee declined", () => {
+      const ics = feed(
+        ["X-WR-CALNAME:me@example.com"],
+        [OWNER.replace("%s", "ACCEPTED"), OTHER.replace("%s", "DECLINED")]
+      )
+      assert.strictEqual(IcsParser.parse(ics, { now: NOW }).length, 1)
+    })
+
+    it("drops only the occurrence the owner declined in a series", () => {
+      const ics = [
+        "BEGIN:VCALENDAR",
+        "X-WR-CALNAME:me@example.com",
+        "BEGIN:VEVENT",
+        "UID:series-1",
+        "DTSTART:20260817T140000Z",
+        "DTEND:20260817T150000Z",
+        "RRULE:FREQ=DAILY;COUNT=3",
+        "SUMMARY:Daily",
+        OWNER.replace("%s", "ACCEPTED"),
+        "END:VEVENT",
+        "BEGIN:VEVENT",
+        "UID:series-1",
+        "RECURRENCE-ID:20260818T140000Z",
+        "DTSTART:20260818T140000Z",
+        "DTEND:20260818T150000Z",
+        "SUMMARY:Daily",
+        OWNER.replace("%s", "DECLINED"),
+        "END:VEVENT",
+        "END:VCALENDAR"
+      ].join("\r\n")
+      const starts = IcsParser.parse(ics, { now: NOW, lookaheadDays: 5 }).map((e) =>
+        e.start.toISOString()
+      )
+      assert.deepStrictEqual(starts, ["2026-08-17T14:00:00.000Z", "2026-08-19T14:00:00.000Z"])
+    })
+  })
+
+  describe("icsFeedOwner()", () => {
+    it("reads the owner address from a Google iCal URL", () => {
+      assert.strictEqual(
+        icsFeedOwner(
+          "https://calendar.google.com/calendar/ical/Me%40Example.com/private-abc/basic.ics"
+        ),
+        "me@example.com"
+      )
+    })
+
+    it("returns an empty string for other URLs", () => {
+      assert.strictEqual(icsFeedOwner("https://example.com/cal.ics"), "")
+      assert.strictEqual(icsFeedOwner(""), "")
     })
   })
 })

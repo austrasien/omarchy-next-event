@@ -54,6 +54,9 @@ var LABEL_JUST_NOW = "just now"
 var DEFAULT_EVENT_TITLE = "(Untitled)"
 var DEFAULT_CALENDAR_URL_BASE = "https://calendar.google.com/calendar"
 var RESPONSE_STATUS_DECLINED = "declined"
+// iCalendar PARTSTAT of an attendee who declined; the owner's declined
+// invitations are dropped from ICS feeds as from the JSON sync.
+var ICS_PARTSTAT_DECLINED = "DECLINED"
 
 var SECTION_EVENTS = "EVENTS"
 var SECTION_SETTINGS = "SETTINGS"
@@ -201,6 +204,7 @@ var Constants = {
   DEFAULT_EVENT_TITLE: DEFAULT_EVENT_TITLE,
   DEFAULT_CALENDAR_URL_BASE: DEFAULT_CALENDAR_URL_BASE,
   RESPONSE_STATUS_DECLINED: RESPONSE_STATUS_DECLINED,
+  ICS_PARTSTAT_DECLINED: ICS_PARTSTAT_DECLINED,
   SECTION_EVENTS: SECTION_EVENTS,
   SECTION_SETTINGS: SECTION_SETTINGS,
   SECTION_TODAY: SECTION_TODAY,
@@ -1121,6 +1125,45 @@ class IcsParser {
     return { name: name, params: params, value: value }
   }
 
+  // "mailto:Jane@Example.com" -> "jane@example.com"; "" when not an address.
+  static mailtoAddress(value) {
+    var address = String(value || "")
+      .trim()
+      .replace(/^mailto:/i, "")
+      .toLowerCase()
+    return address.indexOf("@") > 0 ? address : ""
+  }
+
+  // The feed owner's addresses: the ones passed in options.ownerEmails, plus
+  // X-WR-CALNAME when it is an address (Google names a primary calendar's
+  // feed after its owner). Returns a lowercase set.
+  static ownerEmails(lines, options) {
+    var owners = {}
+    var given = (options && options.ownerEmails) || []
+    for (var i = 0; i < given.length; i++) {
+      var address = IcsParser.mailtoAddress(given[i])
+      if (address) owners[address] = true
+    }
+    for (var j = 0; j < lines.length; j++) {
+      var line = lines[j].trim()
+      if (line === "BEGIN:VEVENT") break
+      if (line.toUpperCase().indexOf("X-WR-CALNAME:") === 0) {
+        var calName = IcsParser.mailtoAddress(line.substring(line.indexOf(":") + 1))
+        if (calName) owners[calName] = true
+      }
+    }
+    return owners
+  }
+
+  // True when one of the owner's addresses is an attendee who declined.
+  static declinedByOwner(event, owners) {
+    var attendees = (event && event.attendees) || []
+    for (var i = 0; i < attendees.length; i++) {
+      if (attendees[i].partstat === ICS_PARTSTAT_DECLINED && owners[attendees[i].email]) return true
+    }
+    return false
+  }
+
   static parseEventBlock(block, tzResolver) {
     var event = {
       uid: null,
@@ -1132,6 +1175,7 @@ class IcsParser {
       meetUrl: null,
       rrule: null,
       exdates: [],
+      attendees: [],
       durationMs: 0,
       startKey: 0,
       tzInfo: null
@@ -1200,6 +1244,11 @@ class IcsParser {
         event.xConference = (event.xConference ? event.xConference + " " : "") + propValue.trim()
       else if (propName === "CONFERENCE")
         event.conference = (event.conference ? event.conference + " " : "") + propValue.trim()
+      else if (propName === "ATTENDEE")
+        event.attendees.push({
+          email: IcsParser.mailtoAddress(propValue),
+          partstat: String(prop.params.PARTSTAT || "").toUpperCase()
+        })
       else if (propName === "EXDATE") {
         var exdateParts = propValue.split(",")
         for (var j = 0; j < exdateParts.length; j++) {
@@ -1260,6 +1309,7 @@ class IcsParser {
     var tzResolver = options.tzResolver || new TimezoneResolver()
 
     var lines = IcsParser.unfoldIcs(raw)
+    var owners = IcsParser.ownerEmails(lines, options)
     if (tzResolver && typeof tzResolver.registerVTimezones === "function") {
       tzResolver.registerVTimezones(lines)
     }
@@ -1336,6 +1386,7 @@ class IcsParser {
         if (exdateSet[startMs]) continue
         var overrideEvent = overridesByTime[startMs] || null
         var source = overrideEvent || master
+        if (IcsParser.declinedByOwner(source, owners)) continue
         var startDate = overrideEvent ? overrideEvent.start : occStart
         var endDate = overrideEvent ? overrideEvent.end : new Date(startMs + master.durationMs)
         if (endDate.getTime() <= startDate.getTime())
@@ -2454,6 +2505,23 @@ function parseJsonState(rawText, options) {
   return JsonStateParser.parseJsonState(rawText, options)
 }
 
+// A Google Calendar iCal address names its calendar:
+// https://calendar.google.com/calendar/ical/<calendar id>/private-.../basic.ics
+// For a primary calendar that id is the owner's address. "" otherwise.
+function icsFeedOwner(url) {
+  var match = /^https:\/\/calendar\.google\.com\/calendar\/ical\/([^/]+)\//.exec(
+    String(url || "").trim()
+  )
+  if (!match) return ""
+  var calendarId
+  try {
+    calendarId = decodeURIComponent(match[1])
+  } catch (_) {
+    return ""
+  }
+  return IcsParser.mailtoAddress(calendarId)
+}
+
 function splitIcsFeeds(raw) {
   return FeedConfigParser.splitIcsFeeds(raw)
 }
@@ -2637,6 +2705,7 @@ if (typeof module !== "undefined" && module.exports) {
 
     // Public API functions
     parseIcs: parseIcs,
+    icsFeedOwner: icsFeedOwner,
     parseJsonEvents: parseJsonEvents,
     parseJsonState: parseJsonState,
     splitIcsFeeds: splitIcsFeeds,
